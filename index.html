@@ -1,0 +1,1395 @@
+<!doctype html>
+<html lang="es-MX">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Braille a través del juego</title>
+<meta name="description" content="Panel para controlar el tablero Braille de seis botones con notas musicales.">
+<meta name="theme-color" content="#4f8a2b">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" type="image/png" href="icon-192.png">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Braille Juego">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&family=JetBrains+Mono:wght@400;600&family=Pixelify+Sans:wght@500;700&display=swap">
+<style>
+/* Layout: panel del adulto a la izquierda, tablero virtual 45x30 y registro de mensajes a la derecha; una columna en teléfono */
+:root{
+  --bg:#e7ece0; --panel:#fbfcf7; --ink:#1d2618; --muted:#5b6852; --line:#c6cfbb; --line-d:#a9b39d;
+  --grass:#4f8a2b; --grass-d:#36621c; --dirt:#6e4c2e; --dirt-d:#4a321e; --stone:#8d948a;
+  --ok:#2d8a3a; --warn:#b8681a; --bad:#b03d2e;
+  --b1:#d9483b; --b2:#e8892b; --b3:#e3bd22; --b4:#5fae3a; --b5:#3a8fd1; --b6:#8a5bd1;
+  --f-display:"Pixelify Sans", "Courier New", monospace;
+  --f-body:"Atkinson Hyperlegible", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --f-mono:"JetBrains Mono", ui-monospace, Menlo, Consolas, monospace;
+  color-scheme:light;
+}
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{margin:0}
+[hidden]{display:none!important}
+img{max-width:100%}
+body{background:var(--bg);color:var(--ink);font-family:var(--f-body);font-size:16px;line-height:1.5}
+button,input,select,textarea{font:inherit;color:inherit}
+:focus-visible{outline:3px solid var(--b5);outline-offset:2px}
+
+.top{background:var(--grass);color:#fff;border-bottom:10px solid var(--dirt);box-shadow:inset 0 -4px 0 var(--grass-d)}
+.top-in{max-width:1280px;margin:0 auto;padding-block:14px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));display:flex;flex-wrap:wrap;gap:12px 24px;align-items:center;justify-content:space-between}
+.top h1{font-family:var(--f-display);font-weight:700;font-size:clamp(1.3rem,3vw,1.75rem);margin:0;letter-spacing:.02em;text-wrap:balance}
+.top .sub{font-size:.9rem;opacity:.9}
+.top-ctrl{display:flex;flex-wrap:wrap;gap:12px;align-items:center}
+.conn{display:flex;background:var(--grass-d);padding:3px;gap:3px}
+.conn button{border:0;background:transparent;color:#e6f0dc;padding:6px 10px;font-size:.85rem;cursor:pointer}
+.conn button[aria-pressed="true"]{background:#fff;color:var(--grass-d);font-weight:700}
+.conn button:disabled{cursor:not-allowed;opacity:.7}
+.vol{display:flex;align-items:center;gap:8px;font-size:.85rem}
+.vol input{accent-color:#fff;width:110px}
+
+.app{max-width:1280px;margin:0 auto;padding-block:20px 40px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));display:grid;gap:20px;grid-template-columns:minmax(0,1fr)}
+@media (min-width:980px){.app{grid-template-columns:minmax(0,1.15fr) minmax(0,1fr)}.lado{position:sticky;top:12px;align-self:start}}
+.app.solo{grid-template-columns:minmax(0,760px);justify-content:center}
+.link-dev{border:0;background:none;padding:0;color:var(--muted);text-decoration:underline;text-underline-offset:3px;cursor:pointer;font-size:.85rem}
+.lado{display:grid;gap:16px;min-width:0}
+#panel{min-width:0;display:grid;gap:16px;align-content:start}
+
+.card{background:var(--panel);border:3px solid var(--line);box-shadow:inset 0 -4px 0 rgba(0,0,0,.05);padding:18px;display:grid;gap:14px;min-width:0}
+.eyebrow{font-family:var(--f-display);font-size:.8rem;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+h2{font-family:var(--f-display);font-weight:700;font-size:1.6rem;margin:0;line-height:1.15;text-wrap:balance}
+h3{font-size:1.05rem;margin:0}
+p{margin:0}
+.muted{color:var(--muted)}
+.lbl{font-size:.8rem;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+.row{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
+
+.btn{border:0;background:var(--grass);color:#fff;font-family:var(--f-display);font-weight:500;font-size:1rem;padding:10px 16px;box-shadow:inset 0 -4px 0 var(--grass-d);cursor:pointer;min-height:44px}
+.btn:active{transform:translateY(2px);box-shadow:inset 0 -2px 0 var(--grass-d)}
+.btn.sec{background:#e2e7da;color:var(--ink);box-shadow:inset 0 -4px 0 var(--line-d)}
+.btn.stop{background:var(--dirt);box-shadow:inset 0 -4px 0 var(--dirt-d)}
+.btn.peq{font-size:.85rem;padding:6px 10px;min-height:36px}
+.btn:disabled{opacity:.45;cursor:not-allowed;transform:none}
+.volver{border:0;background:none;color:var(--grass-d);font-weight:700;cursor:pointer;padding:0;justify-self:start}
+
+.modos{display:grid;gap:10px}
+.modo{display:flex;gap:16px;align-items:center;text-align:left;border:3px solid var(--line);background:var(--panel);padding:14px 16px;cursor:pointer;box-shadow:inset 0 -5px 0 rgba(0,0,0,.06)}
+.modo:hover{border-color:var(--grass)}
+.modo .num{font-family:var(--f-display);font-size:1.5rem;width:48px;height:48px;display:grid;place-items:center;background:var(--grass);color:#fff;box-shadow:inset 0 -4px 0 var(--grass-d);flex:none}
+.modo:nth-child(2) .num{background:var(--dirt);box-shadow:inset 0 -4px 0 var(--dirt-d)}
+.modo:nth-child(3) .num{background:var(--b5);box-shadow:inset 0 -4px 0 #276a9f}
+.modo:nth-child(4) .num{background:var(--b6);box-shadow:inset 0 -4px 0 #6440a0}
+.modo:nth-child(5) .num{background:var(--stone);box-shadow:inset 0 -4px 0 #6b7268}
+.modo b{font-family:var(--f-display);font-size:1.15rem;font-weight:500;display:block}
+.modo small{font-size:.92rem;color:var(--muted)}
+.tag{font-size:.72rem;font-weight:700;background:#fff1d6;color:#7a4a0c;padding:1px 6px;margin-left:6px;vertical-align:2px}
+
+.seg{display:inline-flex;border:2px solid var(--line-d);flex-wrap:wrap}
+.seg button{border:0;background:var(--panel);padding:7px 12px;cursor:pointer;font-size:.9rem}
+.seg button[aria-pressed="true"]{background:var(--ink);color:#fff}
+.toggles{display:grid;gap:8px}
+.toggles label{display:flex;gap:10px;align-items:flex-start;font-size:.95rem;cursor:pointer}
+.toggles input{width:20px;height:20px;accent-color:var(--grass);flex:none;margin-top:2px}
+
+.letras{display:grid;grid-template-columns:repeat(auto-fill,minmax(44px,1fr));gap:6px}
+.letras button{border:2px solid var(--line-d);background:#fff;font-family:var(--f-display);font-size:1.2rem;height:46px;cursor:pointer}
+.letras button[aria-pressed="true"]{background:var(--grass);border-color:var(--grass-d);color:#fff}
+
+.celda{display:inline-grid;grid-template-columns:repeat(2,auto);gap:var(--g,8px) calc(var(--g,8px)*1.6);padding:var(--g,8px);background:#fff;border:2px solid var(--line)}
+.celda i{width:var(--d,18px);height:var(--d,18px);border-radius:50%;border:2px solid var(--line-d);background:transparent;display:block}
+.celda i.on{background:var(--ink);border-color:var(--ink)}
+.celda i.act{background:var(--b3);border-color:#9c8010}
+.celda i.ok{background:var(--ok);border-color:var(--ok)}
+.celda.grande{--d:30px;--g:12px}
+.celda.mini{--d:9px;--g:4px;border-width:1px}
+.letra-sel{display:flex;gap:20px;align-items:center;flex-wrap:wrap}
+.letra-big{font-family:var(--f-display);font-size:4rem;line-height:1;min-width:64px}
+
+.prog{display:flex;gap:8px;flex-wrap:wrap}
+.prog span{font-family:var(--f-display);font-size:1.1rem;width:44px;height:44px;display:grid;place-items:center;border:2px solid var(--line-d);background:#fff}
+.prog span.actual{background:var(--b3);border-color:#9c8010}
+.prog span.mostrado{background:#fff6cc;border-color:#c9a51a}
+.prog span.hecho{background:var(--ok);border-color:var(--ok);color:#fff}
+
+.msg{padding:10px 12px;border-left:5px solid var(--stone);background:#f1f4ec;font-size:.95rem}
+.msg.ok{border-color:var(--ok);background:#e6f3e5}
+.msg.warn{border-color:var(--warn);background:#fbefe0}
+
+.stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}
+@media (max-width:520px){.stats{grid-template-columns:repeat(2,minmax(0,1fr))}}
+.stat{background:#fff;border:2px solid var(--line);padding:8px 10px}
+.stat b{font-family:var(--f-display);font-size:1.5rem;font-weight:500;display:block;font-variant-numeric:tabular-nums}
+.stat span{font-size:.78rem;color:var(--muted)}
+.objetivo{display:flex;gap:16px;align-items:center}
+.objetivo .disco{width:72px;height:72px;border-radius:50%;display:grid;place-items:center;font-family:var(--f-display);font-size:2rem;color:#fff;background:var(--stone);flex:none}
+.notas{display:flex;gap:6px;flex-wrap:wrap}
+.notas button{border:0;color:#fff;font-weight:700;padding:6px 10px;cursor:pointer;min-height:36px;box-shadow:inset 0 -3px 0 rgba(0,0,0,.25)}
+
+.barras{display:grid;gap:6px}
+.barra{display:grid;grid-template-columns:56px 1fr 34px;gap:8px;align-items:center;font-size:.9rem;font-variant-numeric:tabular-nums}
+.barra .pista{height:14px;background:#edf0e8;position:relative}
+.barra .pista i{position:absolute;inset:0 auto 0 0;display:block;transition:width .2s}
+.hist{display:flex;gap:4px;flex-wrap:wrap;min-height:30px}
+.hist span{width:28px;height:28px;display:grid;place-items:center;color:#fff;font-weight:700;font-size:.9rem}
+.big{font-family:var(--f-display);font-size:3rem;line-height:1;min-width:60px}
+
+/* Tablero virtual */
+.tablero-head{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap}
+.chip{font-size:.8rem;font-weight:700;padding:3px 8px;background:var(--ink);color:#fff}
+.tablero{container-type:inline-size;aspect-ratio:3/2;max-width:100%;background:
+  linear-gradient(45deg,rgba(0,0,0,.07) 25%,transparent 25%,transparent 75%,rgba(0,0,0,.07) 75%) 0 0/16px 16px,
+  linear-gradient(45deg,rgba(0,0,0,.07) 25%,transparent 25%,transparent 75%,rgba(0,0,0,.07) 75%) 8px 8px/16px 16px,
+  #5d4430;
+  border:6px solid var(--dirt-d);box-shadow:inset 0 0 0 4px #7d5c3d,inset 0 -10px 0 rgba(0,0,0,.2);display:grid;grid-template-rows:auto 1fr;padding:3cqw 4cqw;gap:2cqw;transition:box-shadow .2s}
+.tablero.idle .boton{filter:saturate(.15) brightness(.6)}
+.tablero.fb-ok{box-shadow:inset 0 0 0 4px #7d5c3d,0 0 0 6px var(--ok)}
+.tablero.fb-retry{box-shadow:inset 0 0 0 4px #7d5c3d,0 0 0 6px var(--warn)}
+.altavoz{display:flex;align-items:center;gap:2cqw;background:#2a1f15;color:#f3e7c9;font-family:var(--f-display);font-size:max(13px,3.2cqw);padding:1.2cqw 2.4cqw;min-height:7cqw}
+.altavoz svg{width:max(16px,3.6cqw);height:auto;flex:none}
+.altavoz.pulse{animation:pulse .5s}
+@keyframes pulse{from{background:#5a4429}to{background:#2a1f15}}
+.botones{display:grid;grid-template-columns:auto auto auto auto;align-content:space-evenly;justify-content:center;column-gap:4cqw;row-gap:1.5cqw}
+.botones .n{font-family:var(--f-display);color:#f3e7c9;font-size:max(15px,4.6cqw);align-self:center;text-align:center}
+.boton{width:15cqw;height:15cqw;min-width:44px;min-height:44px;border-radius:50%;border:0;background:var(--c);cursor:pointer;position:relative;filter:saturate(.45) brightness(.72);box-shadow:inset 0 -1.2cqw 0 rgba(0,0,0,.3),0 .8cqw 0 rgba(0,0,0,.35);transition:filter .12s,box-shadow .12s,transform .06s;touch-action:manipulation}
+.boton:nth-of-type(odd){margin-right:4cqw}
+.boton .nota{position:absolute;inset:0;display:grid;place-items:center;color:#fff;font-weight:700;font-size:max(11px,2.6cqw);text-shadow:0 1px 2px rgba(0,0,0,.5)}
+.boton.on{filter:saturate(1.15) brightness(1.18);box-shadow:inset 0 -1.2cqw 0 rgba(0,0,0,.2),0 0 0 1cqw rgba(255,255,255,.55),0 0 5cqw var(--c)}
+.boton:active{transform:translateY(.5cqw)}
+.tablero.fb-retry .botones{animation:sacudir .3s}
+@keyframes sacudir{25%{transform:translateX(-1cqw)}75%{transform:translateX(1cqw)}}
+.hint{font-size:.85rem;color:var(--muted)}
+kbd{font-family:var(--f-mono);font-size:.8rem;border:1px solid var(--line-d);border-bottom-width:3px;padding:0 5px;background:#fff}
+
+/* Registro */
+.log{font-family:var(--f-mono);font-size:.78rem;max-height:260px;overflow:auto;background:#1f2519;color:#dfe8d2;padding:8px;display:grid;gap:2px;align-content:start}
+.ln{display:grid;grid-template-columns:auto auto minmax(0,1fr);gap:8px;align-items:baseline}
+.ln .ts{color:#8d9a80}
+.ln .dir{font-weight:600}
+.ln.out .dir{color:#9fd36f}
+.ln.in .dir{color:#f0b35a}
+.ln code{word-break:break-all;white-space:pre-wrap}
+
+/* Personalizado */
+.lista{display:grid;gap:10px}
+.item{border:2px solid var(--line);background:#fff;padding:12px;display:grid;gap:8px;min-width:0}
+.item-top{display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;align-items:baseline}
+.badge{font-size:.72rem;font-weight:700;padding:2px 7px;background:#e2e7da;text-transform:uppercase;letter-spacing:.05em}
+.badge.pend{background:#fff1d6;color:#7a4a0c}
+.badge.rev{background:#dff0dc;color:#1f6a2a}
+.celdas{display:flex;gap:6px;flex-wrap:wrap;align-items:center}
+.celdas .celda.cur{border-color:var(--b3);box-shadow:0 0 0 2px var(--b3)}
+.form{display:grid;gap:12px}
+.campo{display:grid;gap:4px}
+.campo input,.campo select,.campo textarea{border:2px solid var(--line-d);background:#fff;padding:8px 10px;width:100%;min-width:0}
+.dos{display:grid;gap:12px;grid-template-columns:repeat(auto-fit,minmax(200px,1fr))}
+.ed-celdas{display:flex;flex-wrap:wrap;gap:12px}
+.ed-celda{border:2px solid var(--line-d);background:#fff;padding:10px;display:grid;gap:8px;justify-items:center}
+.ed-puntos{display:grid;grid-template-columns:repeat(2,40px);gap:6px 14px}
+.ed-puntos button{width:40px;height:40px;border-radius:50%;border:2px solid var(--line-d);background:#fff;cursor:pointer;font-size:.8rem;color:var(--muted)}
+.ed-puntos button[aria-pressed="true"]{background:var(--ink);border-color:var(--ink);color:#fff}
+details summary{cursor:pointer;font-weight:700}
+pre{font-family:var(--f-mono);font-size:.78rem;background:#f1f4ec;padding:10px;overflow-x:auto;margin:8px 0 0}
+.err{color:var(--bad);font-weight:700}
+.pares{display:flex;gap:8px;flex-wrap:wrap;align-items:flex-start}
+.par{display:grid;justify-items:center;gap:4px}
+.par b{font-family:var(--f-display);font-weight:500;font-size:1rem}
+.celda.cur{border-color:var(--b3);box-shadow:0 0 0 3px var(--b3)}
+.buscar-fila{display:flex;gap:8px;flex-wrap:wrap}
+.buscar-fila input,.buscador{flex:1 1 220px;min-width:0;border:2px solid var(--line-d);background:#fff;padding:10px 12px;font-size:1.05rem}
+.mini-sel{display:flex;gap:6px;align-items:center;font-size:.9rem;color:var(--muted)}
+.mini-sel select{border:2px solid var(--line-d);background:#fff;padding:5px 8px;color:var(--ink)}
+.lista{max-height:560px;overflow:auto}
+.item.sel{border-color:var(--grass);box-shadow:0 0 0 2px var(--grass)}
+.item-nombre{font-size:1.1rem}
+.perfiles{display:flex;gap:6px;flex-wrap:wrap}
+.perfil-mini{font-size:.92rem;justify-self:start}
+.perfil-mini summary{cursor:pointer;list-style:none;display:inline-flex;gap:6px;align-items:baseline;color:var(--muted)}
+.perfil-mini summary::-webkit-details-marker{display:none}
+.perfil-mini summary strong{color:var(--ink)}
+.perfil-mini .cambiar{color:var(--grass-d);text-decoration:underline;text-underline-offset:3px}
+.perfil-mini[open] .cambiar{display:none}
+.perfil-cuerpo{display:grid;gap:10px;margin-top:10px;padding:12px;border:2px solid var(--line);background:#f4f7ef}
+.perfil-cuerpo .buscar-fila input{font-size:.95rem;padding:6px 10px;flex-basis:140px}
+.perfiles button{border:2px solid var(--line-d);background:#fff;padding:4px 10px;font-size:.9rem;cursor:pointer;min-height:34px}
+
+.perfiles button[aria-pressed="true"]{background:var(--ink);border-color:var(--ink);color:#fff}
+.pie{font-size:.85rem;color:var(--muted);max-width:65ch}
+.top-in{padding-top:max(14px,env(safe-area-inset-top,0px))}
+.instalar{border:0;background:#fff;color:var(--grass-d);font-family:var(--f-display);font-size:.95rem;padding:7px 12px;cursor:pointer;box-shadow:inset 0 -3px 0 #cfd8c3}
+.estado-con{font-size:.8rem;color:#e6f0dc}
+.aviso{background:#fff3d9;border-bottom:3px solid #e2b866}
+.aviso-in{max-width:1280px;margin:0 auto;padding-block:10px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));display:flex;gap:10px 16px;flex-wrap:wrap;align-items:center;justify-content:space-between;font-size:.95rem}
+.aviso-in code{font-family:var(--f-mono);font-size:.85rem;background:#fff;padding:2px 6px;word-break:break-all}
+.ln .det{color:#8d9a80;margin-left:8px}
+.ln.err .dir{color:#ff8a7a}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+</style>
+</head>
+<body>
+
+<header class="top">
+  <div class="top-in">
+    <div>
+      <h1>Braille a través del juego</h1>
+      <div class="sub">Panel del adulto · Juega: <strong id="perfil-sub"></strong></div>
+    </div>
+    <div class="top-ctrl">
+      <div class="conn" role="group" aria-label="Conexión con el tablero">
+        <button aria-pressed="true" id="conn-sim">Simulación</button>
+        <button aria-pressed="false" id="conn-ble">Tablero Bluetooth</button>
+      </div>
+      <span class="estado-con" id="estado-con" aria-live="polite"></span>
+      <button class="instalar" id="instalar" hidden>Instalar app</button>
+      <label class="vol" for="vol">Volumen <input type="range" id="vol" min="0" max="100" value="70"></label>
+    </div>
+  </div>
+</header>
+<div class="aviso" id="aviso" hidden><div class="aviso-in"><div id="aviso-txt"></div><button class="btn sec peq" id="aviso-x">Cerrar</button></div></div>
+
+<main class="app">
+  <div id="panel"></div>
+  <aside class="lado" id="lado">
+    <section class="card" id="card-tablero">
+      <div class="tablero-head">
+        <span class="eyebrow" id="tablero-titulo">Tablero virtual · 45 × 30 cm</span>
+        <span class="chip" id="modo-chip">Sin modo</span>
+      </div>
+      <div class="tablero idle" id="tablero">
+        <div class="altavoz" id="altavoz-box">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M4 9h4l5-4v14l-5-4H4z" fill="currentColor"/><path d="M16 8.5a5 5 0 0 1 0 7M18.5 6a8.5 8.5 0 0 1 0 12"/></svg>
+          <span id="altavoz" aria-live="polite">Tablero listo</span>
+        </div>
+        <div class="botones" id="botones"></div>
+      </div>
+      <p class="hint">Haz clic en los botones o usa el teclado como en una máquina Perkins: <kbd>F</kbd> <kbd>D</kbd> <kbd>S</kbd> para los puntos 1 2 3 y <kbd>J</kbd> <kbd>K</kbd> <kbd>L</kbd> para 4 5 6.</p>
+    </section>
+    <section class="card" id="card-log" hidden>
+      <div class="tablero-head">
+        <span class="eyebrow">Mensajes app ↔ tablero</span>
+        <button class="btn sec peq" id="log-clear">Limpiar</button>
+      </div>
+      <div class="log" id="log" aria-label="Registro de mensajes"></div>
+      <p class="hint">Son las líneas de texto que viajan por Bluetooth entre la app y el PIC. Las marcadas como solo app no se envían.</p>
+    </section>
+  </aside>
+</main>
+
+<script>
+const $ = s => document.querySelector(s);
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+
+const NOTAS = {1:['Do',261.63],2:['Re',293.66],3:['Mi',329.63],4:['Fa',349.23],5:['Sol',392.00],6:['La',440.00]};
+const COLORES = {1:'var(--b1)',2:'var(--b2)',3:'var(--b3)',4:'var(--b4)',5:'var(--b5)',6:'var(--b6)'};
+const TECLAS = {f:1,d:2,s:3,j:4,k:5,l:6};
+const ABC = {
+  a:[1], b:[1,2], c:[1,4], d:[1,4,5], e:[1,5], f:[1,2,4], g:[1,2,4,5], h:[1,2,5], i:[2,4], j:[2,4,5],
+  k:[1,3], l:[1,2,3], m:[1,3,4], n:[1,3,4,5], 'ñ':[1,2,4,5,6], o:[1,3,5], p:[1,2,3,4], q:[1,2,3,4,5], r:[1,2,3,5],
+  s:[2,3,4], t:[2,3,4,5], u:[1,3,6], v:[1,2,3,6], w:[2,4,5,6], x:[1,3,4,6], y:[1,3,4,5,6], z:[1,3,5,6]
+};
+const LETRAS = 'abcdefghijklmnñopqrstuvwxyz'.split('');
+const MODOS = {
+  PIANO_LIBRE:'Piano libre', ACCION_REACCION:'Acción–reacción', APRENDIZAJE:'Aprendizaje guiado',
+  MEMORIA:'Memoria', PERSONALIZADO:'Personalizado', IDLE:'Sin modo'
+};
+
+/* ---------- Audio ---------- */
+let ac = null, volumen = 0.7;
+function audio(){
+  if(!ac){ try{ ac = new (window.AudioContext||window.webkitAudioContext)(); }catch(e){ return null; } }
+  if(ac.state === 'suspended') ac.resume();
+  return ac;
+}
+function tono(freq, dur=0.5, tipo='triangle', vol=0.3, cuando=0){
+  if(typeof conexion !== 'undefined' && conexion.modo === 'ble') return;
+  const a = audio(); if(!a || volumen === 0) return;
+  const t = a.currentTime + cuando;
+  const o = a.createOscillator(), g = a.createGain();
+  o.type = tipo; o.frequency.value = freq;
+  g.gain.setValueAtTime(0.0001, t);
+  g.gain.exponentialRampToValueAtTime(Math.max(0.0002, vol*volumen), t+0.015);
+  g.gain.exponentialRampToValueAtTime(0.0001, t+dur);
+  o.connect(g).connect(a.destination); o.start(t); o.stop(t+dur+0.05);
+}
+function hablar(texto){
+  try{
+    if(!('speechSynthesis' in window)) return;
+    const u = new SpeechSynthesisUtterance(texto);
+    u.lang = 'es-MX'; u.rate = 0.85; u.volume = volumen;
+    speechSynthesis.cancel(); speechSynthesis.speak(u);
+  }catch(e){}
+}
+$('#vol').addEventListener('input', e => { volumen = e.target.value/100; });
+
+/* ---------- Registro de mensajes ---------- */
+const logEl = $('#log');
+function log(dir, obj, tramas=[]){
+  const d = new Date(), ts = d.toTimeString().slice(0,8);
+  const ln = document.createElement('div');
+  ln.className = 'ln ' + dir;
+  const nombre = obj.cmd || obj.evt || '';
+  const etiqueta = dir === 'out' ? 'APP → TAB' : dir === 'in' ? 'TAB → APP' : 'ERROR';
+  ln.innerHTML = `<span class="ts">${ts}</span><span class="dir">${etiqueta}</span><code>${tramas.length ? esc(tramas.join('  ')) : '—'}<span class="det">${esc(nombre)}${tramas.length || dir === 'err' ? '' : ' (solo app)'}${obj.detalle ? ' · ' + esc(obj.detalle) : ''}</span></code>`;
+  logEl.prepend(ln);
+  while(logEl.children.length > 150) logEl.lastChild.remove();
+}
+$('#log-clear').addEventListener('click', () => logEl.innerHTML = '');
+
+/* ---------- Tablero simulado (se comporta como el firmware) ---------- */
+const botonesEl = $('#botones');
+[[1,4],[2,5],[3,6]].forEach(([iz,de]) => {
+  botonesEl.insertAdjacentHTML('beforeend',
+    `<span class="n">${iz}</span>
+     <button class="boton" data-b="${iz}" style="--c:${COLORES[iz]}" aria-label="Botón ${iz}, ${NOTAS[iz][0]}"><span class="nota">${NOTAS[iz][0]}</span></button>
+     <button class="boton" data-b="${de}" style="--c:${COLORES[de]}" aria-label="Botón ${de}, ${NOTAS[de][0]}"><span class="nota">${NOTAS[de][0]}</span></button>
+     <span class="n">${de}</span>`);
+});
+const tableroEl = $('#tablero'), altavozEl = $('#altavoz'), altavozBox = $('#altavoz-box');
+
+const tablero = {
+  modo:'IDLE', leds:{}, flash:{}, timers:{},
+  render(){
+    document.querySelectorAll('.boton').forEach(el => {
+      const b = +el.dataset.b;
+      el.classList.toggle('on', !!(this.leds[b] || this.flash[b]));
+    });
+    tableroEl.classList.toggle('idle', this.modo === 'IDLE');
+    $('#modo-chip').textContent = MODOS[this.modo] || this.modo;
+  },
+  pantalla(t){
+    altavozEl.textContent = t;
+    altavozBox.classList.remove('pulse'); void altavozBox.offsetWidth; altavozBox.classList.add('pulse');
+  },
+  apagarTodo(){ for(let b=1;b<=6;b++) this.leds[b]=false; this.render(); },
+  marco(clase){
+    tableroEl.classList.remove('fb-ok','fb-retry'); void tableroEl.offsetWidth;
+    tableroEl.classList.add(clase);
+    clearTimeout(this.timers.marco);
+    this.timers.marco = setTimeout(() => tableroEl.classList.remove(clase), 700);
+  },
+  recibir(c){
+    switch(c.cmd){
+      case 'SET_MODE': this.modo = c.modo; this.apagarTodo(); this.pantalla(MODOS[c.modo] || c.modo); break;
+      case 'START_ACTIVITY': case 'STOP_ACTIVITY': break;
+      case 'LED': c.botones.forEach(b => this.leds[b] = !!c.on); this.render(); break;
+      case 'LEDS_OFF': this.apagarTodo(); break;
+      case 'PLAY_NOTE': tono(NOTAS[c.boton][1], 0.6); this.pantalla('♪ ' + NOTAS[c.boton][0]); break;
+      case 'SPEAK':
+        if(!(conexion.modo === 'ble' && LETRAS.includes(String(c.texto).toLowerCase()))) hablar(c.texto);
+        this.pantalla('«' + c.texto + '»'); break;
+      case 'FEEDBACK':
+        if(c.tipo === 'correcto'){ tono(1046.5,0.18,'sine',0.25,0.25); tono(1318.5,0.3,'sine',0.25,0.37); this.marco('fb-ok'); this.pantalla('¡Bien!'); }
+        else if(c.tipo === 'reintentar'){ tono(196,0.25,'sine',0.3,0.25); tono(174.6,0.35,'sine',0.3,0.43); this.marco('fb-retry'); this.pantalla('Intenta otra vez'); }
+        else if(c.tipo === 'completado'){
+          [1046.5,1318.5,1568,2093].forEach((f,i) => tono(f,0.25,'sine',0.22,0.2+i*0.12));
+          this.marco('fb-ok'); this.pantalla('¡Completado!');
+          [0,500].forEach(t => setTimeout(() => { for(let b=1;b<=6;b++) this.flash[b]=true; this.render();
+            setTimeout(() => { for(let b=1;b<=6;b++) this.flash[b]=false; this.render(); }, 250); }, t+300));
+        }
+        break;
+    }
+  },
+  espejoPulsacion(b){
+    this.pantalla('♪ ' + NOTAS[b][0]);
+    this.flash[b] = true; this.render();
+    clearTimeout(this.timers[b]);
+    this.timers[b] = setTimeout(() => { this.flash[b] = false; this.render(); }, 280);
+  },
+  presionar(b){
+    if(this.modo === 'IDLE'){ this.pantalla('Elige un modo en la app'); return; }
+    tono(NOTAS[b][1], 0.5);
+    this.pantalla('♪ ' + NOTAS[b][0]);
+    this.flash[b] = true; this.render();
+    clearTimeout(this.timers[b]);
+    this.timers[b] = setTimeout(() => { this.flash[b] = false; this.render(); }, 280);
+    bus.emitir({evt:'BUTTON_PRESSED', boton:b});
+  }
+};
+
+/* ---------- Bus de comunicación (hoy simulación, después Web Serial) ---------- */
+/* Protocolo corto: una línea de texto por comando, terminada en salto de línea */
+const MODO_NUM = {IDLE:0, PIANO_LIBRE:1, ACCION_REACCION:2, APRENDIZAJE:3, MEMORIA:4, PERSONALIZADO:5};
+const pistaLetra = l => 11 + LETRAS.indexOf(l);
+function aTramas(c){
+  switch(c.cmd){
+    case 'SET_MODE': return ['M' + MODO_NUM[c.modo]];
+    case 'LED': return c.botones.map(b => `L${b},${c.on ? 1 : 0}`);
+    case 'LEDS_OFF': case 'STOP_ACTIVITY': return ['X'];
+    case 'PLAY_NOTE': return ['N' + c.boton];
+    case 'SPEAK': { const l = String(c.texto).toLowerCase(); return LETRAS.includes(l) ? ['S' + pistaLetra(l)] : []; }
+    case 'FEEDBACK': return ['F' + ({correcto:1, reintentar:2, completado:3}[c.tipo])];
+    default: return [];
+  }
+}
+function tramasEvento(e){
+  if(e.evt === 'BUTTON_PRESSED') return ['B' + e.boton];
+  if(e.evt === 'DEVICE_READY') return ['R'];
+  return [];
+}
+
+/* Conexión Bluetooth con el HM-10: servicio FFE0, característica FFE1 */
+const conexion = {modo:'sim', disp:null, car:null, cola:Promise.resolve(), buffer:''};
+const esIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+function aviso(html){ $('#aviso-txt').innerHTML = html; $('#aviso').hidden = false; }
+$('#aviso-x').addEventListener('click', () => $('#aviso').hidden = true);
+function pintarConexion(texto){
+  const ble = conexion.modo === 'ble';
+  $('#conn-sim').setAttribute('aria-pressed', !ble);
+  $('#conn-ble').setAttribute('aria-pressed', ble);
+  $('#estado-con').textContent = texto ?? (ble ? `Conectado a ${conexion.disp?.name || 'tablero'}` : '');
+  $('#tablero-titulo').textContent = 'Tablero virtual · 45 × 30 cm';
+  if(typeof pintarLado === 'function') pintarLado();
+}
+function avisoSinBluetooth(){
+  const url = location.href.split('#')[0];
+  const texto = esIOS
+    ? 'En iPhone el Bluetooth solo funciona desde la app <strong>Bluefy</strong>, que es gratis en la App Store. Instálala y abre ahí este link:'
+    : 'Este navegador no puede usar Bluetooth. En Android abre este link en <strong>Google Chrome</strong>:';
+  aviso(`${texto} <code id="aviso-url">${esc(url)}</code> <button class="btn sec peq" id="copiar-url">Copiar link</button>`);
+  $('#copiar-url').addEventListener('click', async () => {
+    try{ await navigator.clipboard.writeText(url); $('#copiar-url').textContent = 'Copiado'; }
+    catch(e){ const r = document.createRange(); r.selectNodeContents($('#aviso-url')); const sel = getSelection(); sel.removeAllRanges(); sel.addRange(r); }
+  });
+}
+async function conectarBLE(){
+  if(!navigator.bluetooth){ avisoSinBluetooth(); return; }
+  try{
+    pintarConexion('Buscando tablero…');
+    const disp = await navigator.bluetooth.requestDevice({
+      filters:[{services:[0xffe0]}, {namePrefix:'HM'}, {namePrefix:'BT'}, {namePrefix:'Tablero'}, {namePrefix:'TABLERO'}],
+      optionalServices:[0xffe0]
+    });
+    pintarConexion('Conectando…');
+    disp.addEventListener('gattserverdisconnected', alDesconectar);
+    const servidor = await disp.gatt.connect();
+    const servicio = await servidor.getPrimaryService(0xffe0);
+    const car = await servicio.getCharacteristic(0xffe1);
+    await car.startNotifications();
+    car.addEventListener('characteristicvaluechanged', e => recibirBLE(new TextDecoder().decode(e.target.value)));
+    conexion.disp = disp; conexion.car = car; conexion.modo = 'ble'; conexion.buffer = '';
+    $('#aviso').hidden = true;
+    pintarConexion();
+    bus.enviar({cmd:'SET_MODE', modo:tablero.modo});
+  }catch(err){
+    conexion.modo = 'sim'; conexion.car = null;
+    if(err && err.name === 'NotFoundError'){ pintarConexion(''); return; }
+    pintarConexion('');
+    aviso(`No se pudo conectar con el tablero. Revisa que el Bluetooth del celular esté encendido y que el HM-10 tenga corriente. <small>(${esc(err && err.message || err)})</small>`);
+  }
+}
+function desconectarBLE(){
+  const d = conexion.disp;
+  conexion.modo = 'sim'; conexion.car = null; conexion.disp = null;
+  if(d && d.gatt.connected) d.gatt.disconnect();
+  pintarConexion('');
+}
+function alDesconectar(){
+  if(conexion.modo !== 'ble') return;
+  conexion.modo = 'sim'; conexion.car = null;
+  pintarConexion('');
+  aviso('Se perdió la conexión con el tablero y la app volvió a simulación. Pulsa «Tablero Bluetooth» para reconectar.');
+}
+function escribirBLE(tramas){
+  const datos = new TextEncoder().encode(tramas.map(t => t + '\n').join(''));
+  for(let i = 0; i < datos.length; i += 20){
+    const trozo = datos.slice(i, i + 20);
+    conexion.cola = conexion.cola.then(() => {
+      if(!conexion.car) return;
+      return conexion.car.writeValueWithoutResponse ? conexion.car.writeValueWithoutResponse(trozo) : conexion.car.writeValue(trozo);
+    }).catch(e => log('err', {detalle:'No se pudo enviar: ' + e.message}));
+  }
+}
+function recibirBLE(texto){
+  conexion.buffer += texto;
+  const partes = conexion.buffer.split(/\r\n|\n|\r/);
+  conexion.buffer = partes.pop();
+  partes.map(p => p.trim()).filter(Boolean).forEach(linea => {
+    const m = /^B([1-6])$/.exec(linea);
+    if(m){ const b = +m[1]; tablero.espejoPulsacion(b); bus.emitir({evt:'BUTTON_PRESSED', boton:b}, [linea]); }
+    else if(linea === 'R'){ bus.emitir({evt:'DEVICE_READY'}, [linea]); }
+    else log('in', {evt:'DESCONOCIDO'}, [linea]);
+  });
+}
+let verTecnico = false;
+try{ verTecnico = localStorage.getItem('braille.tecnico') === '1'; }catch(e){}
+function pintarLado(){
+  const sim = conexion.modo !== 'ble';
+  $('#card-tablero').hidden = !sim;
+  $('#card-log').hidden = !verTecnico;
+  const vacio = !sim && !verTecnico;
+  $('#lado').hidden = vacio;
+  document.querySelector('.app').classList.toggle('solo', vacio);
+}
+$('#conn-ble').addEventListener('click', () => { if(conexion.modo !== 'ble') conectarBLE(); });
+$('#conn-sim').addEventListener('click', () => { if(conexion.modo === 'ble') desconectarBLE(); });
+
+const bus = {
+  enviar(c){
+    const t = aTramas(c);
+    log('out', c, t);
+    tablero.recibir(c);
+    if(conexion.modo === 'ble' && conexion.car && t.length) escribirBLE(t);
+  },
+  emitir(e, t){ log('in', e, t || tramasEvento(e)); app.alRecibir(e); }
+};
+
+document.querySelectorAll('.boton').forEach(el => {
+  el.addEventListener('pointerdown', e => { e.preventDefault(); audio(); tablero.presionar(+el.dataset.b); });
+  el.addEventListener('keydown', e => { if(e.key === 'Enter' || e.key === ' '){ e.preventDefault(); tablero.presionar(+el.dataset.b); } });
+});
+document.addEventListener('keydown', e => {
+  if(e.repeat || e.ctrlKey || e.metaKey || e.altKey) return;
+  if(/INPUT|TEXTAREA|SELECT/.test(document.activeElement?.tagName || '')) return;
+  const b = TECLAS[e.key.toLowerCase()];
+  if(b){ e.preventDefault(); audio(); tablero.presionar(b); }
+});
+
+/* ---------- Lógica de la app ---------- */
+let ses = 0, esperaPulsacion = null, alPresionar = null, memActual = null, siguienteCelda = null;
+const app = {
+  alRecibir(e){
+    if(e.evt !== 'BUTTON_PRESSED') return;
+    if(esperaPulsacion){ const r = esperaPulsacion; esperaPulsacion = null; r(e.boton); }
+    else if(alPresionar) alPresionar(e.boton);
+  }
+};
+function reiniciar(){
+  ses++; esperaPulsacion = null; alPresionar = null; memActual = null; siguienteCelda = null;
+  return ses;
+}
+function entrarModo(modo){ reiniciar(); bus.enviar({cmd:'SET_MODE', modo}); }
+function nuevaActividad(){ const s = reiniciar(); bus.enviar({cmd:'LEDS_OFF'}); return s; }
+const esperarPulsacion = () => new Promise(r => esperaPulsacion = r);
+const dormir = ms => new Promise(r => setTimeout(r, ms));
+
+function celdaHTML(puntos, clase='', estados={}){
+  const p = new Set(puntos);
+  return `<span class="celda ${clase}" aria-label="Puntos ${[...p].sort().join(', ') || 'ninguno'}">` +
+    [1,4,2,5,3,6].map(n => `<i class="${estados[n] || (p.has(n)?'on':'')}"></i>`).join('') + `</span>`;
+}
+const ordenar = a => [...a].sort((x,y) => x-y);
+const mismaCelda = (a,b) => a.length === b.size && a.every(x => b.has(x));
+
+/* Celda guiada: el tablero enseña los puntos y el niño los sigue */
+async function celdaGuiada(celda, s, avance, ui){
+  const puntos = ordenar(celda);
+  if(avance === 'esperar'){
+    for(let i=0;i<puntos.length;i++){
+      const p = puntos[i];
+      ui.estado(i,'actual');
+      bus.enviar({cmd:'LED', botones:[p], on:true});
+      bus.enviar({cmd:'PLAY_NOTE', boton:p});
+      while(true){
+        const b = await esperarPulsacion(); if(s !== ses) return false;
+        if(b === p) break;
+        bus.enviar({cmd:'FEEDBACK', tipo:'reintentar'});
+        ui.msg(`Presionó el ${b}. Le toca el punto ${p}.`, 'warn');
+        await dormir(800); if(s !== ses) return false;
+        bus.enviar({cmd:'PLAY_NOTE', boton:p});
+      }
+      bus.enviar({cmd:'LED', botones:[p], on:false});
+      ui.estado(i,'hecho'); ui.msg(`Punto ${p} correcto.`, 'ok');
+      await dormir(300); if(s !== ses) return false;
+    }
+  } else {
+    for(let i=0;i<puntos.length;i++){
+      ui.estado(i,'mostrado');
+      bus.enviar({cmd:'LED', botones:[puntos[i]], on:true});
+      bus.enviar({cmd:'PLAY_NOTE', boton:puntos[i]});
+      await dormir(850); if(s !== ses) return false;
+    }
+    ui.msg(`Los botones encendidos se apagan cuando ${N()} los presiona, en cualquier orden.`);
+    const faltan = new Set(puntos);
+    while(faltan.size){
+      const b = await esperarPulsacion(); if(s !== ses) return false;
+      if(faltan.has(b)){ faltan.delete(b); bus.enviar({cmd:'LED', botones:[b], on:false}); ui.estado(puntos.indexOf(b),'hecho'); }
+      else if(!puntos.includes(b)){ bus.enviar({cmd:'FEEDBACK', tipo:'reintentar'}); ui.msg(`El ${b} no está en esta celda.`, 'warn'); }
+    }
+  }
+  return true;
+}
+
+/* Celda de memoria: solo se anuncia, el niño elige los puntos */
+function celdaMemoria(celda, s, op, ui){
+  return new Promise(resolver => {
+    const sel = new Set();
+    const comprobar = () => {
+      if(s !== ses) return;
+      if(mismaCelda(celda, sel)){
+        alPresionar = null; memActual = null; ui.resultado(true); resolver(true); return;
+      }
+      const faltan = celda.filter(x => !sel.has(x)), sobran = [...sel].filter(x => !celda.includes(x));
+      bus.enviar({cmd:'FEEDBACK', tipo:'reintentar'});
+      ui.resultado(false, faltan, sobran);
+      sel.clear(); bus.enviar({cmd:'LEDS_OFF'}); ui.sel(sel);
+      if(op.repetir && op.texto) setTimeout(() => { if(s === ses) bus.enviar({cmd:'SPEAK', texto:op.texto}); }, 1100);
+    };
+    alPresionar = b => {
+      if(s !== ses) return;
+      if(sel.has(b)){
+        if(!op.quitar) return;
+        sel.delete(b); if(op.iluminar) bus.enviar({cmd:'LED', botones:[b], on:false});
+      } else {
+        sel.add(b); if(op.iluminar) bus.enviar({cmd:'LED', botones:[b], on:true});
+      }
+      ui.sel(sel);
+      if(op.confirma === 'auto' && sel.size === celda.length) setTimeout(comprobar, 350);
+    };
+    memActual = { comprobar, borrar(){ sel.clear(); bus.enviar({cmd:'LEDS_OFF'}); ui.sel(sel); } };
+  });
+}
+
+/* ---------- Vistas ---------- */
+const panel = $('#panel');
+function cabecera(n, titulo, desc){
+  return `<div class="card">
+    <button class="volver" data-accion="volver">← Modos</button>
+    <span class="eyebrow">Modo ${n}</span>
+    <h2>${titulo}</h2>
+    <p class="muted">${desc}</p>
+  </div>`;
+}
+function seg(id, opciones, valor){
+  return `<div class="seg" id="${id}" role="group">` + opciones.map(([v,t]) =>
+    `<button data-v="${v}" aria-pressed="${v===valor}">${t}</button>`).join('') + `</div>`;
+}
+function conectarSeg(id, alCambiar){
+  const el = $('#'+id);
+  el.addEventListener('click', e => {
+    const b = e.target.closest('button'); if(!b) return;
+    el.querySelectorAll('button').forEach(x => x.setAttribute('aria-pressed', x === b));
+    alCambiar(b.dataset.v);
+  });
+}
+function gridLetras(id, sel){
+  return `<div class="letras" id="${id}">` + LETRAS.map(l =>
+    `<button data-l="${l}" aria-pressed="${l===sel}">${l.toUpperCase()}</button>`).join('') + `</div>`;
+}
+function conectarLetras(id, alElegir){
+  const el = $('#'+id);
+  el.addEventListener('click', e => {
+    const b = e.target.closest('button'); if(!b) return;
+    el.querySelectorAll('button').forEach(x => x.setAttribute('aria-pressed', x === b));
+    alElegir(b.dataset.l);
+  });
+}
+function mensaje(el, txt, tipo=''){ el.className = 'msg ' + tipo; el.textContent = txt; }
+
+panel.addEventListener('click', e => {
+  if(e.target.closest('[data-accion="volver"]')) vistaInicio();
+});
+
+/* Perfiles: la app sirve para cualquier persona */
+const CLAVE_PERFILES = 'braille.perfiles.v1';
+function cargarPerfiles(){
+  try{ const r = localStorage.getItem(CLAVE_PERFILES); if(r){ const p = JSON.parse(r); if(p.lista && p.lista.length) return p; } }catch(e){}
+  return {lista:[{id:'p-neythan', nombre:'Neythan'}], activo:'p-neythan'};
+}
+let perfiles = cargarPerfiles();
+function guardarPerfiles(){ try{ localStorage.setItem(CLAVE_PERFILES, JSON.stringify(perfiles)); }catch(e){} }
+const perfilActivo = () => perfiles.lista.find(p => p.id === perfiles.activo) || perfiles.lista[0];
+const N = () => perfilActivo()?.nombre || 'el niño';
+const limpiarNombre = t => String(t||'').replace(/[<>&"'`]/g,'').replace(/\s+/g,' ').trim().slice(0,30);
+function pintarSub(){ $('#perfil-sub').textContent = N(); }
+pintarSub();
+
+function vistaInicio(){
+  entrarModo('IDLE');
+  let confirmarBorrar = false;
+  panel.innerHTML = `<div class="card">
+    <span class="eyebrow">Panel del adulto</span>
+    <h2 id="saludo"></h2>
+    <p class="muted" id="intro"></p>
+    <details class="perfil-mini" id="perfil-box">
+      <summary>Juega <strong id="pf-actual"></strong> <span class="cambiar">cambiar</span></summary>
+      <div class="perfil-cuerpo">
+        <div class="perfiles" id="perfiles"></div>
+        <div class="buscar-fila">
+          <input id="pf-nombre" autocomplete="off" maxlength="30" placeholder="Nombre" aria-label="Nombre del perfil">
+          <button class="btn sec peq" id="pf-add">Agregar</button>
+          <button class="btn sec peq" id="pf-ren">Renombrar</button>
+          <button class="btn sec peq" id="pf-del">Eliminar</button>
+        </div>
+        <div class="err" id="pf-err" aria-live="polite"></div>
+      </div>
+    </details>
+  </div>
+  <div class="modos" id="modos"></div>
+  <p class="pie">Prototipo en desarrollo para pruebas en simulación. Las notas son fijas en todos los modos: 1 Do, 2 Re, 3 Mi, 4 Fa, 5 Sol, 6 La. Proyecto desarrollado con el CRIQ.</p>
+  <button class="link-dev" id="ver-tec"></button>`;
+  const pintar = () => {
+    const n = N();
+    $('#saludo').textContent = `¡Hola, ${n}!`;
+    $('#intro').textContent = `Selecciona un modo para el tablero. ${n} juega en el tablero y el adulto controla todo desde aquí.`;
+    $('#pf-actual').textContent = n;
+    $('#perfiles').innerHTML = perfiles.lista.map(p => `<button data-id="${esc(p.id)}" aria-pressed="${p.id===perfiles.activo}">${esc(p.nombre)}</button>`).join('');
+    $('#pf-del').disabled = perfiles.lista.length < 2;
+    $('#pf-del').textContent = confirmarBorrar ? `¿Eliminar a ${n}?` : 'Eliminar';
+    $('#modos').innerHTML = `
+      <button class="modo" data-m="libre"><span class="num">1</span><span><b>Piano libre</b><small>Explorar los seis botones y sus notas, sin respuestas correctas</small></span></button>
+      <button class="modo" data-m="ar"><span class="num">2</span><span><b>Acción–reacción</b><small>Suena una nota y ${esc(n)} busca el botón que le corresponde</small></span></button>
+      <button class="modo" data-m="guiado"><span class="num">3</span><span><b>Aprendizaje guiado</b><small>El tablero ilumina y toca los puntos de una letra</small></span></button>
+      <button class="modo" data-m="memoria"><span class="num">4</span><span><b>Memoria</b><small>Solo se dice la letra y ${esc(n)} recuerda sus puntos</small></span></button>
+      <button class="modo" data-m="pers"><span class="num">5</span><span><b>Personalizado</b><small>Palabras y contenidos guardados en la biblioteca</small></span></button>`;
+    pintarSub();
+  };
+  pintar();
+  const tec = $('#ver-tec');
+  tec.textContent = verTecnico ? 'Ocultar mensajes técnicos' : 'Ver mensajes técnicos';
+  tec.addEventListener('click', () => {
+    verTecnico = !verTecnico;
+    try{ localStorage.setItem('braille.tecnico', verTecnico ? '1' : '0'); }catch(e){}
+    tec.textContent = verTecnico ? 'Ocultar mensajes técnicos' : 'Ver mensajes técnicos';
+    pintarLado();
+  });
+  const err = t => $('#pf-err').textContent = t || '';
+  $('#perfiles').addEventListener('click', e => {
+    const b = e.target.closest('button'); if(!b) return;
+    perfiles.activo = b.dataset.id; confirmarBorrar = false; guardarPerfiles(); err(); pintar();
+  });
+  $('#pf-nombre').addEventListener('keydown', e => { if(e.key === 'Enter'){ e.preventDefault(); $('#pf-add').click(); } });
+  $('#pf-add').addEventListener('click', () => {
+    const n = limpiarNombre($('#pf-nombre').value);
+    if(!n) return err('Escribe un nombre para el perfil.');
+    if(perfiles.lista.some(p => p.nombre.toLowerCase() === n.toLowerCase())) return err(`Ya existe un perfil llamado ${n}.`);
+    const p = {id:'p'+Date.now().toString(36), nombre:n};
+    perfiles.lista.push(p); perfiles.activo = p.id; guardarPerfiles();
+    $('#pf-nombre').value = ''; confirmarBorrar = false; err(); pintar();
+  });
+  $('#pf-ren').addEventListener('click', () => {
+    const n = limpiarNombre($('#pf-nombre').value);
+    if(!n) return err('Escribe el nuevo nombre en el campo.');
+    if(perfiles.lista.some(p => p.id !== perfiles.activo && p.nombre.toLowerCase() === n.toLowerCase())) return err(`Ya existe un perfil llamado ${n}.`);
+    perfilActivo().nombre = n; guardarPerfiles(); $('#pf-nombre').value = ''; err(); pintar();
+  });
+  $('#pf-del').addEventListener('click', () => {
+    if(perfiles.lista.length < 2) return;
+    if(!confirmarBorrar){ confirmarBorrar = true; pintar(); return; }
+    perfiles.lista = perfiles.lista.filter(p => p.id !== perfiles.activo);
+    perfiles.activo = perfiles.lista[0].id; confirmarBorrar = false; guardarPerfiles(); err(); pintar();
+  });
+  $('#modos').addEventListener('click', e => {
+    const m = e.target.closest('.modo')?.dataset.m; if(!m) return; audio();
+    ({libre:vistaLibre, ar:vistaAR, guiado:vistaGuiada, memoria:vistaMemoria, pers:vistaPersonalizado})[m]?.();
+  });
+}
+
+/* Modo 1 */
+function vistaLibre(){
+  entrarModo('PIANO_LIBRE');
+  bus.enviar({cmd:'START_ACTIVITY', actividad:'PIANO_LIBRE'});
+  panel.innerHTML = cabecera(1,'Piano libre',`${N()} presiona cualquier botón. Cada uno suena con su nota y se ilumina. Aquí no hay respuestas correctas ni incorrectas.`) +
+  `<div class="card">
+    <div class="row" style="gap:16px">
+      <div class="big" id="ult">–</div>
+      <div><div class="lbl">Última pulsación</div><div class="muted" id="ult-n">Esperando a que ${N()} toque un botón</div></div>
+    </div>
+    <div class="lbl">Pulsaciones por botón</div>
+    <div class="barras" id="barras"></div>
+    <div class="lbl">Recorrido reciente</div>
+    <div class="hist" id="hist"></div>
+    <div class="row"><button class="btn sec" id="reset">Reiniciar conteo</button><button class="btn stop" data-accion="volver">Detener modo</button></div>
+  </div>`;
+  const cnt = {1:0,2:0,3:0,4:0,5:0,6:0}, hist = [];
+  const pintar = () => {
+    const max = Math.max(1, ...Object.values(cnt));
+    $('#barras').innerHTML = [1,2,3,4,5,6].map(b =>
+      `<div class="barra"><span>${b} · ${NOTAS[b][0]}</span><span class="pista"><i style="width:${cnt[b]/max*100}%;background:${COLORES[b]}"></i></span><span>${cnt[b]}</span></div>`).join('');
+    $('#hist').innerHTML = hist.slice(-16).map(b => `<span style="background:${COLORES[b]}">${b}</span>`).join('') || '<span class="muted" style="width:auto;color:var(--muted)">Sin pulsaciones todavía</span>';
+  };
+  pintar();
+  alPresionar = b => {
+    cnt[b]++; hist.push(b);
+    $('#ult').textContent = b; $('#ult-n').textContent = `Nota ${NOTAS[b][0]}`;
+    pintar();
+  };
+  $('#reset').addEventListener('click', () => { for(const k in cnt) cnt[k]=0; hist.length=0; pintar(); });
+}
+
+/* Modo 2 */
+function vistaAR(){
+  entrarModo('ACCION_REACCION');
+  const op = {mostrar:true, auto:false, repetir:true};
+  const st = {obj:null, t0:0, errRonda:0, aciertos:0, errores:0, rondas:0, tiempos:[], previo:null, hist:[]};
+  panel.innerHTML = cabecera(2,'Acción–reacción',`El tablero toca una nota sin decir qué botón es. ${N()} escucha, busca el botón y lo presiona. Si se equivoca puede escuchar la nota otra vez y volver a intentar.`) +
+  `<div class="card">
+    <div class="objetivo">
+      <div class="disco" id="disco">?</div>
+      <div><div class="lbl">Botón esperado</div><div id="obj-txt">Pulsa «Nueva ronda» para tocar una nota</div></div>
+    </div>
+    <div class="row">
+      <button class="btn" id="ronda">Nueva ronda</button>
+      <button class="btn sec" id="repetir" disabled>Repetir nota</button>
+      <button class="btn stop" id="parar" disabled>Detener</button>
+    </div>
+    <div><div class="lbl" style="margin-bottom:6px">O elige la nota tú</div><div class="notas" id="notas">${[1,2,3,4,5,6].map(b=>`<button data-b="${b}" style="background:${COLORES[b]}">${b} · ${NOTAS[b][0]}</button>`).join('')}</div></div>
+    <div class="msg" id="msg">La nota aleatoria nunca repite la anterior.</div>
+  </div>
+  <div class="card">
+    <div class="stats">
+      <div class="stat"><b id="s-ac">0</b><span>Aciertos</span></div>
+      <div class="stat"><b id="s-er">0</b><span>Intentos fallidos</span></div>
+      <div class="stat"><b id="s-ro">0</b><span>Rondas</span></div>
+      <div class="stat"><b id="s-tp">–</b><span>Tiempo promedio</span></div>
+    </div>
+    <p class="hint">El tiempo se mide desde que suena la nota hasta que ${N()} presiona el botón correcto.</p>
+    <div class="toggles">
+      <label><input type="checkbox" id="t-mostrar" checked> Mostrar al adulto el botón esperado</label>
+      <label><input type="checkbox" id="t-repetir" checked> Volver a tocar la nota después de un error</label>
+      <label><input type="checkbox" id="t-auto"> Empezar la siguiente ronda automáticamente después de un acierto</label>
+    </div>
+  </div>`;
+  const msg = $('#msg');
+  const pintar = () => {
+    const d = $('#disco');
+    if(st.obj && op.mostrar){ d.textContent = st.obj; d.style.background = COLORES[st.obj]; $('#obj-txt').textContent = `Botón ${st.obj} · ${NOTAS[st.obj][0]}`; }
+    else if(st.obj){ d.textContent = '?'; d.style.background = 'var(--stone)'; $('#obj-txt').textContent = 'Oculto para el adulto'; }
+    else { d.textContent = '?'; d.style.background = 'var(--stone)'; $('#obj-txt').textContent = 'Sin ronda activa'; }
+    $('#s-ac').textContent = st.aciertos; $('#s-er').textContent = st.errores; $('#s-ro').textContent = st.rondas;
+    $('#s-tp').textContent = st.tiempos.length ? (st.tiempos.reduce((a,b)=>a+b,0)/st.tiempos.length/1000).toFixed(1)+' s' : '–';
+    $('#repetir').disabled = !st.obj; $('#parar').disabled = !st.obj;
+  };
+  const ronda = (b) => {
+    const s = ses;
+    if(!b){ const opciones = [1,2,3,4,5,6].filter(x => x !== st.previo); b = opciones[Math.floor(Math.random()*opciones.length)]; }
+    st.obj = b; st.previo = b; st.t0 = performance.now(); st.errRonda = 0; st.rondas++;
+    if(st.rondas === 1) bus.enviar({cmd:'START_ACTIVITY', actividad:'ACCION_REACCION'});
+    bus.enviar({cmd:'PLAY_NOTE', boton:b});
+    mensaje(msg, `Esperando la respuesta de ${N()}…`);
+    pintar();
+    alPresionar = p => {
+      if(s !== ses || !st.obj) return;
+      if(p === st.obj){
+        const dt = performance.now() - st.t0;
+        st.aciertos++; st.tiempos.push(dt);
+        bus.enviar({cmd:'FEEDBACK', tipo:'correcto'});
+        mensaje(msg, `¡Correcto! Botón ${st.obj} (${NOTAS[st.obj][0]}) en ${(dt/1000).toFixed(1)} s` + (st.errRonda ? ` después de ${st.errRonda} intento${st.errRonda>1?'s':''} fallido${st.errRonda>1?'s':''}.` : ' al primer intento.'), 'ok');
+        st.obj = null; pintar();
+        if(op.auto) setTimeout(() => { if(s === ses && !st.obj) ronda(); }, 1800);
+      } else {
+        st.errores++; st.errRonda++;
+        bus.enviar({cmd:'FEEDBACK', tipo:'reintentar'});
+        mensaje(msg, `Presionó el ${p} (${NOTAS[p][0]}). Puede intentarlo otra vez.`, 'warn');
+        pintar();
+        if(op.repetir) setTimeout(() => { if(s === ses && st.obj) bus.enviar({cmd:'PLAY_NOTE', boton:st.obj}); }, 1000);
+      }
+    };
+  };
+  $('#ronda').addEventListener('click', () => ronda());
+  $('#notas').addEventListener('click', e => { const b = e.target.closest('button'); if(b) ronda(+b.dataset.b); });
+  $('#repetir').addEventListener('click', () => { if(st.obj) bus.enviar({cmd:'PLAY_NOTE', boton:st.obj}); });
+  $('#parar').addEventListener('click', () => { st.obj = null; alPresionar = null; bus.enviar({cmd:'STOP_ACTIVITY'}); mensaje(msg,'Ronda detenida.'); pintar(); });
+  $('#t-mostrar').addEventListener('change', e => { op.mostrar = e.target.checked; pintar(); });
+  $('#t-repetir').addEventListener('change', e => op.repetir = e.target.checked);
+  $('#t-auto').addEventListener('change', e => op.auto = e.target.checked);
+  pintar();
+}
+
+/* Modo 3 */
+function vistaGuiada(){
+  entrarModo('APRENDIZAJE');
+  let letra = 'a', avance = 'esperar';
+  panel.innerHTML = cabecera(3,'Aprendizaje guiado',`El tablero dice la letra, ilumina sus puntos uno por uno con su nota y ${N()} los presiona. Al terminar vuelve a decir la letra.`) +
+  `<div class="card">
+    <div class="lbl">Elige una letra</div>
+    ${gridLetras('letras', letra)}
+    <div class="letra-sel"><div class="letra-big" id="lg">A</div><div id="lc"></div><div><div class="lbl">Puntos</div><div id="lp"></div></div></div>
+  </div>
+  <div class="card">
+    <div><div class="lbl" style="margin-bottom:6px">Cómo avanzan las luces</div>
+    ${seg('avance',[['esperar','Una por una, espera a que presione'],['auto','Se encienden todas en secuencia']],avance)}</div>
+    <div class="row"><button class="btn" id="iniciar">Iniciar letra</button><button class="btn sec" id="decir">Decir la letra</button><button class="btn stop" id="detener" disabled>Detener</button></div>
+    <div class="prog" id="prog"></div>
+    <div class="msg" id="msg">Elige una letra y pulsa «Iniciar letra».</div>
+  </div>`;
+  const msg = $('#msg');
+  const pintarLetra = () => {
+    $('#lg').textContent = letra.toUpperCase();
+    $('#lc').innerHTML = celdaHTML(ABC[letra], 'grande');
+    $('#lp').textContent = ordenar(ABC[letra]).join(' · ');
+    $('#prog').innerHTML = ordenar(ABC[letra]).map(p => `<span>${p}</span>`).join('');
+  };
+  pintarLetra();
+  const ui = {
+    estado(i, e){ const el = $('#prog').children[i]; if(el) el.className = e; },
+    msg(t, tipo){ mensaje(msg, t, tipo); }
+  };
+  conectarLetras('letras', l => { nuevaActividad(); letra = l; pintarLetra(); $('#detener').disabled = true; mensaje(msg, `Letra ${l.toUpperCase()} lista.`); });
+  conectarSeg('avance', v => avance = v);
+  $('#decir').addEventListener('click', () => bus.enviar({cmd:'SPEAK', texto:letra.toUpperCase()}));
+  $('#detener').addEventListener('click', () => { nuevaActividad(); bus.enviar({cmd:'STOP_ACTIVITY'}); pintarLetra(); mensaje(msg,'Actividad detenida.'); $('#detener').disabled = true; });
+  $('#iniciar').addEventListener('click', async () => {
+    const s = nuevaActividad(); pintarLetra(); $('#detener').disabled = false;
+    bus.enviar({cmd:'START_ACTIVITY', actividad:'APRENDIZAJE', letra, celdas:[ordenar(ABC[letra])]});
+    bus.enviar({cmd:'SPEAK', texto:letra.toUpperCase()});
+    mensaje(msg, 'El tablero está diciendo la letra…');
+    await dormir(1100); if(s !== ses) return;
+    const ok = await celdaGuiada(ABC[letra], s, avance, ui); if(!ok || s !== ses) return;
+    await dormir(400); if(s !== ses) return;
+    bus.enviar({cmd:'SPEAK', texto:letra.toUpperCase()});
+    bus.enviar({cmd:'FEEDBACK', tipo:'completado'});
+    mensaje(msg, `${N()} completó la letra ${letra.toUpperCase()}.`, 'ok');
+    $('#detener').disabled = true;
+  });
+}
+
+/* Modo 4 */
+function vistaMemoria(){
+  entrarModo('MEMORIA');
+  let letra = 'a';
+  const op = {confirma:'app', iluminar:true, quitar:true, repetir:true, verRespuesta:true};
+  panel.innerHTML = cabecera(4,'Memoria',`El tablero solo dice la letra. No se encienden pistas. ${N()} recuerda qué botones forman la letra y los presiona en el orden que quiera.`) +
+  `<div class="card">
+    <div class="lbl">Elige una letra</div>
+    ${gridLetras('letras', letra)}
+    <div class="letra-sel">
+      <div class="letra-big" id="lg">A</div>
+      <div><div class="lbl">Respuesta de ${N()}</div><div id="resp"></div></div>
+      <div id="sol-box"><div class="lbl">Respuesta correcta</div><div id="sol"></div></div>
+    </div>
+  </div>
+  <div class="card">
+    <div class="row">
+      <button class="btn" id="iniciar">Iniciar</button>
+      <button class="btn sec" id="decir">Repetir letra</button>
+      <button class="btn" id="comprobar" disabled>Comprobar respuesta</button>
+      <button class="btn sec" id="borrar" disabled>Borrar respuesta</button>
+    </div>
+    <div class="msg" id="msg">Se compara el conjunto de puntos, el orden de las pulsaciones no importa.</div>
+    <div><div class="lbl" style="margin-bottom:6px">Cómo se termina la respuesta</div>
+    ${seg('confirma',[['app','El adulto pulsa «Comprobar»'],['auto','Automático al presionar tantos puntos como tiene la letra']],op.confirma)}</div>
+    <div class="toggles">
+      <label><input type="checkbox" id="t-ilum" checked> Iluminar los botones que ${N()} va eligiendo (solo muestra su propia respuesta)</label>
+      <label><input type="checkbox" id="t-quitar" checked> Presionar otra vez un botón lo quita de la respuesta</label>
+      <label><input type="checkbox" id="t-rep" checked> Repetir la letra después de un error</label>
+      <label><input type="checkbox" id="t-ver" checked> Mostrar al adulto la respuesta correcta</label>
+    </div>
+  </div>`;
+  const msg = $('#msg');
+  const pintar = (sel = new Set()) => {
+    $('#lg').textContent = letra.toUpperCase();
+    $('#resp').innerHTML = celdaHTML([...sel], 'grande');
+    $('#sol').innerHTML = celdaHTML(ABC[letra], 'grande');
+    $('#sol-box').hidden = !op.verRespuesta;
+  };
+  pintar();
+  const activos = on => { $('#comprobar').disabled = !on || op.confirma === 'auto'; $('#borrar').disabled = !on; };
+  const ui = {
+    sel: s => pintar(s),
+    resultado(ok, faltan=[], sobran=[]){
+      if(ok) return;
+      const partes = [];
+      if(faltan.length) partes.push(`faltaron ${faltan.join(', ')}`);
+      if(sobran.length) partes.push(`sobraron ${sobran.join(', ')}`);
+      mensaje(msg, `Todavía no. ${partes.join(' y ')}. La respuesta se borró para intentar de nuevo.`, 'warn');
+    }
+  };
+  conectarLetras('letras', l => { nuevaActividad(); letra = l; pintar(); activos(false); mensaje(msg, `Letra ${l.toUpperCase()} lista.`); });
+  conectarSeg('confirma', v => { op.confirma = v; if(memActual) activos(true); });
+  $('#t-ilum').addEventListener('change', e => op.iluminar = e.target.checked);
+  $('#t-quitar').addEventListener('change', e => op.quitar = e.target.checked);
+  $('#t-rep').addEventListener('change', e => op.repetir = e.target.checked);
+  $('#t-ver').addEventListener('change', e => { op.verRespuesta = e.target.checked; $('#sol-box').hidden = !op.verRespuesta; });
+  $('#decir').addEventListener('click', () => bus.enviar({cmd:'SPEAK', texto:letra.toUpperCase()}));
+  $('#comprobar').addEventListener('click', () => memActual?.comprobar());
+  $('#borrar').addEventListener('click', () => memActual?.borrar());
+  $('#iniciar').addEventListener('click', async () => {
+    const s = nuevaActividad(); pintar();
+    bus.enviar({cmd:'START_ACTIVITY', actividad:'MEMORIA', letra});
+    bus.enviar({cmd:'SPEAK', texto:letra.toUpperCase()});
+    mensaje(msg, `Esperando la respuesta de ${N()}…`);
+    activos(true);
+    await celdaMemoria(ABC[letra], s, {...op, texto:letra.toUpperCase()}, ui);
+    if(s !== ses) return;
+    activos(false);
+    bus.enviar({cmd:'SPEAK', texto:letra.toUpperCase()});
+    bus.enviar({cmd:'FEEDBACK', tipo:'completado'});
+    bus.enviar({cmd:'LEDS_OFF'});
+    mensaje(msg, `¡Correcto! ${N()} recordó la letra ${letra.toUpperCase()}.`, 'ok');
+  });
+}
+
+/* Modo 5 */
+const ACENTOS = {'á':[1,2,3,5,6], 'é':[2,3,4,6], 'í':[3,4], 'ó':[3,4,6], 'ú':[2,3,4,5,6], 'ü':[1,2,5,6]};
+const CONV = {...ABC, ...ACENTOS};
+const sinAcentos = t => String(t||'').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'');
+function convertirABraille(texto){
+  const t = String(texto||'').trim().toLowerCase();
+  if(!t) return {error:'Escribe una palabra primero.'};
+  if(/\s/.test(t)) return {error:'Escribe una sola palabra, sin espacios.'};
+  const raras = [...new Set([...t].filter(ch => !CONV[ch]))];
+  if(raras.length) return {error:`No puedo convertir: ${raras.join(' ')}. Solo convierto letras de la a a la z, ñ y vocales con acento o diéresis.`};
+  return {celdas:[...t].map(ch => [...CONV[ch]]), letras:[...t]};
+}
+function paresHTML(celdas, texto, clase='mini'){
+  const letras = [...String(texto||'')];
+  const conLetras = letras.length === celdas.length;
+  return `<div class="pares">` + celdas.map((c,i) =>
+    `<span class="par">${celdaHTML(c, clase)}${conLetras?`<b>${esc(letras[i])}</b>`:''}</span>`).join('') + `</div>`;
+}
+
+const CLAVE = 'neythan.personalizado.v1';
+const EJEMPLO = {
+  id:'ejemplo-sol', nombre:'Ejemplo de varias celdas', tipo:'palabra', texto:'sol',
+  significado:'La palabra sol escrita letra por letra en grado I. Sirve para probar el avance entre celdas.',
+  pronunciacion:'sol', celdas:[[2,3,4],[1,3,5],[1,2,3]], revisado:false, ejemplo:true, creado:0, practicas:{}
+};
+function cargarContenidos(){
+  try{ const r = localStorage.getItem(CLAVE); if(r) return JSON.parse(r); }catch(e){}
+  return [EJEMPLO];
+}
+function guardarContenidos(arr){ try{ localStorage.setItem(CLAVE, JSON.stringify(arr)); }catch(e){} }
+const cuentas = d => (d.practicas && typeof d.practicas === 'object') ? d.practicas : {};
+const vecesPerfil = d => cuentas(d)[perfiles.activo] || 0;
+const TIPOS = {palabra:'Palabra', letra:'Letra', contraccion:'Contracción', abreviatura:'Abreviatura', simbolo:'Símbolo', otro:'Otro'};
+
+function vistaPersonalizado(){
+  entrarModo('PERSONALIZADO');
+  let datos = cargarContenidos();
+  const filtro = {texto:'', tipo:'todos', orden:'recientes'};
+  const practica = {item:null, modo:'guiado', avance:'auto'};
+  let rapida = null, confirmarBorrar = null;
+
+  const render = () => {
+    panel.innerHTML = cabecera(5,'Personalizado','Escribe una palabra, conviértela a Braille y guárdala en la biblioteca para practicarla cuando quieras. Las contracciones y los símbolos se capturan a mano y deben revisarlos personas con conocimiento de Braille.') +
+    `<div class="card">
+      <h3>Palabra nueva</h3>
+      <div class="buscar-fila">
+        <input id="q-palabra" autocomplete="off" placeholder="Por ejemplo: mamá" aria-label="Palabra nueva">
+        <button class="btn" id="q-convertir">Convertir a Braille</button>
+      </div>
+      <div id="q-prev"></div>
+      <div class="row">
+        <button class="btn" id="q-guardar" disabled>Guardar en la biblioteca</button>
+        <button class="btn sec" id="q-practicar" disabled>Practicar sin guardar</button>
+        <button class="btn sec" id="q-ajustar">Capturar celdas a mano</button>
+      </div>
+      <div class="msg" id="q-msg">La conversión es letra por letra en grado I y solo ocurre cuando pulsas «Convertir a Braille».</div>
+    </div>
+
+    <div class="card">
+      <div class="tablero-head"><h3>Biblioteca <span class="muted" id="b-cuenta"></span></h3><button class="btn sec peq" id="nuevo">Nuevo contenido avanzado</button></div>
+      <input class="buscador" id="b-buscar" type="search" autocomplete="off" placeholder="Buscar por palabra, nombre o significado" aria-label="Buscar en la biblioteca">
+      <div class="row">
+        <label class="mini-sel">Tipo <select id="b-tipo"><option value="todos">Todos</option>${Object.entries(TIPOS).map(([k,v]) => `<option value="${k}">${v}</option>`).join('')}</select></label>
+        <label class="mini-sel">Orden <select id="b-orden"><option value="recientes">Recientes</option><option value="az">A a Z</option><option value="practicadas">Más practicadas</option></select></label>
+      </div>
+      <div class="lista" id="lista"></div>
+      <div class="row">
+        <button class="btn sec peq" id="b-exp">Exportar respaldo</button>
+        <button class="btn sec peq" id="b-imp">Importar respaldo</button>
+        <input type="file" id="b-file" accept="application/json,.json" hidden>
+      </div>
+      <p class="hint" id="b-resp">La biblioteca y los perfiles se guardan en este celular. Exporta un respaldo para pasarlos a otro celular o compartir tus palabras con otra persona.</p>
+    </div>
+
+    <div class="card">
+      <h3>Practicar en el tablero</h3>
+      <div id="p-actual"></div>
+      <div class="row">${seg('p-modo',[['guiado','Guiado'],['memoria','Memoria']],practica.modo)}
+      ${seg('p-avance',[['auto','Pasa sola a la siguiente celda'],['adulto','El adulto pasa de celda']],practica.avance)}</div>
+      <div class="prog" id="prog"></div>
+      <div class="row">
+        <button class="btn" id="p-iniciar" disabled>Iniciar práctica</button>
+        <button class="btn sec" id="p-sig" disabled>Siguiente celda</button>
+        <button class="btn" id="p-comp" disabled>Comprobar celda</button>
+        <button class="btn stop" id="p-det" disabled>Detener</button>
+      </div>
+      <div class="msg" id="msg">En modo guiado cada punto se enciende y espera la pulsación. En memoria ${N()} elige los puntos de cada celda y el adulto pulsa «Comprobar celda».</div>
+    </div>
+    <div class="card"><details id="b-json"><summary>Ver la estructura de datos</summary><pre id="json"></pre></details></div>`;
+    $('#b-buscar').value = filtro.texto; $('#b-tipo').value = filtro.tipo; $('#b-orden').value = filtro.orden;
+    conectarRapida(); conectarLista(); conectarPractica();
+    pintarLista(); pintarActual();
+  };
+
+  /* Palabra rápida */
+  const conectarRapida = () => {
+    const inp = $('#q-palabra'), qmsg = $('#q-msg');
+    const limpiar = () => { rapida = null; $('#q-prev').innerHTML = ''; $('#q-guardar').disabled = true; $('#q-practicar').disabled = true; };
+    inp.addEventListener('input', () => { if(rapida) { limpiar(); mensaje(qmsg, 'Cambiaste la palabra. Vuelve a convertirla.'); } });
+    inp.addEventListener('keydown', e => { if(e.key === 'Enter'){ e.preventDefault(); $('#q-convertir').click(); } });
+    $('#q-convertir').addEventListener('click', () => {
+      const r = convertirABraille(inp.value);
+      if(r.error){ limpiar(); mensaje(qmsg, r.error, 'warn'); return; }
+      const palabra = inp.value.trim().toLowerCase();
+      rapida = {id:'c'+Date.now().toString(36), nombre:palabra, tipo:'palabra', texto:palabra, significado:'',
+                pronunciacion:palabra, celdas:r.celdas, revisado:false, origen:'conversion', creado:Date.now(), practicas:{}};
+      $('#q-prev').innerHTML = paresHTML(r.celdas, palabra, '');
+      $('#q-guardar').disabled = false; $('#q-practicar').disabled = false;
+      const repetida = datos.find(d => d.tipo === 'palabra' && sinAcentos(d.texto) === sinAcentos(palabra) && d.texto === palabra);
+      mensaje(qmsg, repetida ? `«${palabra}» ya está en la biblioteca. Puedes practicarla desde ahí.` :
+        `${r.celdas.length} celda${r.celdas.length>1?'s':''}. Revisa la conversión antes de guardarla. No incluye el signo de mayúscula.`, repetida ? 'warn' : '');
+    });
+    $('#q-guardar').addEventListener('click', () => {
+      if(!rapida) return;
+      const repetida = datos.find(d => d.tipo === 'palabra' && d.texto === rapida.texto);
+      if(repetida){ mensaje(qmsg, `«${rapida.texto}» ya estaba guardada. La dejé seleccionada para practicar.`, 'warn'); elegir(repetida); return; }
+      datos.unshift(rapida); guardarContenidos(datos);
+      const guardada = rapida;
+      inp.value = ''; limpiar();
+      mensaje(qmsg, `«${guardada.texto}» se guardó en la biblioteca y quedó lista para practicar.`, 'ok');
+      pintarLista(); elegir(guardada);
+    });
+    $('#q-practicar').addEventListener('click', () => { if(rapida){ elegir({...rapida, temporal:true}); $('#p-iniciar').scrollIntoView({behavior:'smooth', block:'center'}); } });
+    $('#q-ajustar').addEventListener('click', () => {
+      nuevaActividad();
+      const t = inp.value.trim().toLowerCase();
+      editor(rapida ? {...rapida} : {id:'c'+Date.now().toString(36), nombre:t, tipo:'palabra', texto:t, significado:'', pronunciacion:t, celdas:[[]], revisado:false, creado:Date.now(), practicas:{}}, true);
+    });
+  };
+
+  /* Biblioteca */
+  const filtrados = () => {
+    const q = sinAcentos(filtro.texto.trim());
+    let r = datos.filter(d => (filtro.tipo === 'todos' || d.tipo === filtro.tipo) &&
+      (!q || [d.nombre, d.texto, d.significado, d.pronunciacion].some(x => sinAcentos(x).includes(q))));
+    if(filtro.orden === 'az') r = [...r].sort((a,b) => (a.texto||a.nombre).localeCompare(b.texto||b.nombre, 'es'));
+    else if(filtro.orden === 'practicadas') r = [...r].sort((a,b) => vecesPerfil(b) - vecesPerfil(a));
+    else r = [...r].sort((a,b) => (b.creado||0) - (a.creado||0));
+    return r;
+  };
+  const itemHTML = d => `<div class="item ${practica.item?.id===d.id?'sel':''}" data-id="${esc(d.id)}">
+    <div class="item-top"><strong class="item-nombre">${esc(d.tipo==='palabra' && d.texto ? d.texto : d.nombre)}</strong>
+      <span class="row" style="gap:6px"><span class="badge">${TIPOS[d.tipo]||'Otro'}</span>${d.origen==='conversion'?'<span class="badge">Grado I</span>':''}${d.ejemplo?'<span class="badge pend">Ejemplo</span>':''}<span class="badge ${d.revisado?'rev':'pend'}">${d.revisado?'Revisado':'Sin revisar'}</span></span></div>
+    ${d.tipo!=='palabra' && d.texto ? `<div>Representa: <strong>${esc(d.texto)}</strong></div>` : ''}
+    ${d.significado ? `<div class="muted">${esc(d.significado)}</div>` : ''}
+    ${paresHTML(d.celdas, d.texto)}
+    <div class="row">
+      <button class="btn peq" data-acc="practicar">Practicar</button>
+      <button class="btn sec peq" data-acc="editar">Editar</button>
+      ${confirmarBorrar===d.id
+        ? `<span class="err">¿Eliminar?</span><button class="btn stop peq" data-acc="si">Sí, eliminar</button><button class="btn sec peq" data-acc="no">No</button>`
+        : `<button class="btn sec peq" data-acc="borrar">Eliminar</button>`}
+      <span class="hint">${vecesPerfil(d) ? `${esc(N())} la practicó ${vecesPerfil(d)} ${vecesPerfil(d)===1?'vez':'veces'}` : `${esc(N())} aún no la practica`}</span>
+    </div>
+  </div>`;
+  const pintarLista = () => {
+    const r = filtrados();
+    $('#b-cuenta').textContent = `· ${datos.length} guardado${datos.length===1?'':'s'}`;
+    $('#lista').innerHTML = r.length ? r.map(itemHTML).join('') :
+      `<p class="muted">${datos.length ? 'No hay resultados con esa búsqueda.' : 'La biblioteca está vacía. Escribe una palabra arriba y guárdala.'}</p>`;
+    $('#json').textContent = JSON.stringify(datos, null, 2);
+  };
+  const conectarLista = () => {
+    $('#b-exp').addEventListener('click', () => {
+      const fecha = new Date().toISOString().slice(0,10);
+      const contenido = {app:'braille-a-traves-del-juego', version:1, fecha:new Date().toISOString(), perfiles, biblioteca:datos};
+      const blob = new Blob([JSON.stringify(contenido, null, 2)], {type:'application/json'});
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob); a.download = `respaldo-braille-${fecha}.json`;
+      document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+      $('#b-resp').textContent = `Se descargó el respaldo con ${datos.length} contenido${datos.length===1?'':'s'}.`;
+    });
+    $('#b-imp').addEventListener('click', () => $('#b-file').click());
+    $('#b-file').addEventListener('change', async e => {
+      const f = e.target.files[0]; e.target.value = ''; if(!f) return;
+      try{
+        const r = JSON.parse(await f.text());
+        if(!Array.isArray(r.biblioteca)) throw new Error('formato');
+        let nuevos = 0;
+        r.biblioteca.forEach(d => {
+          if(!d || !d.id || !Array.isArray(d.celdas)) return;
+          if(datos.some(x => x.id === d.id)) return;
+          datos.push(d); nuevos++;
+        });
+        let perfNuevos = 0;
+        (r.perfiles?.lista || []).forEach(p => {
+          if(!p || !p.id || perfiles.lista.some(x => x.id === p.id)) return;
+          perfiles.lista.push({id:p.id, nombre:limpiarNombre(p.nombre) || 'Perfil'}); perfNuevos++;
+        });
+        guardarContenidos(datos); guardarPerfiles(); pintarSub(); pintarLista();
+        $('#b-resp').textContent = `Respaldo importado. Se agregaron ${nuevos} contenido${nuevos===1?'':'s'} y ${perfNuevos} perfil${perfNuevos===1?'':'es'}. Los que ya existían no se duplicaron.`;
+      }catch(err){
+        $('#b-resp').textContent = 'Ese archivo no es un respaldo de esta app.';
+      }
+    });
+    $('#b-buscar').addEventListener('input', e => { filtro.texto = e.target.value; pintarLista(); });
+    $('#b-tipo').addEventListener('change', e => { filtro.tipo = e.target.value; pintarLista(); });
+    $('#b-orden').addEventListener('change', e => { filtro.orden = e.target.value; pintarLista(); });
+    $('#nuevo').addEventListener('click', () => { nuevaActividad(); editor(null); });
+    $('#lista').addEventListener('click', e => {
+      const b = e.target.closest('[data-acc]'); if(!b) return;
+      const id = b.closest('.item').dataset.id, d = datos.find(x => x.id === id);
+      const acc = b.dataset.acc;
+      if(acc === 'editar'){ nuevaActividad(); editor(d); }
+      else if(acc === 'borrar'){ confirmarBorrar = id; pintarLista(); }
+      else if(acc === 'no'){ confirmarBorrar = null; pintarLista(); }
+      else if(acc === 'si'){
+        datos = datos.filter(x => x.id !== id); guardarContenidos(datos); confirmarBorrar = null;
+        if(practica.item?.id === id){ nuevaActividad(); practica.item = null; pintarActual(); }
+        pintarLista();
+      }
+      else if(acc === 'practicar'){ elegir(d); $('#p-iniciar').scrollIntoView({behavior:'smooth', block:'center'}); }
+    });
+  };
+
+  /* Práctica */
+  const elegir = d => {
+    nuevaActividad(); practica.item = d;
+    ['p-sig','p-comp','p-det'].forEach(id => $('#'+id).disabled = true);
+    $('#prog').innerHTML = '';
+    mensaje($('#msg'), `«${d.texto || d.nombre}» lista. Pulsa «Iniciar práctica».`);
+    pintarActual(); pintarLista();
+  };
+  const pintarActual = (cur=-1) => {
+    const d = practica.item, el = $('#p-actual');
+    $('#p-iniciar').disabled = !d;
+    if(!d){ el.innerHTML = '<p class="muted">Elige un contenido de la biblioteca o escribe una palabra arriba.</p>'; return; }
+    el.innerHTML = `<div class="tablero-head"><span><span class="lbl">Seleccionado</span> <strong class="item-nombre">${esc(d.texto || d.nombre)}</strong>${d.temporal?' <span class="badge pend">Sin guardar</span>':''}</span>
+      ${cur >= 0 ? `<span class="hint">Celda ${cur+1} de ${d.celdas.length}</span>` : ''}</div>` +
+      `<div class="pares">` + d.celdas.map((c,i) => {
+        const letras = [...String(d.texto||'')];
+        return `<span class="par">${celdaHTML(c, i===cur ? 'cur' : '')}${letras.length===d.celdas.length?`<b>${esc(letras[i])}</b>`:''}</span>`;
+      }).join('') + `</div>`;
+  };
+  const conectarPractica = () => {
+    const msg = $('#msg');
+    conectarSeg('p-modo', v => practica.modo = v);
+    conectarSeg('p-avance', v => practica.avance = v);
+    const pintarProg = celda => { $('#prog').innerHTML = ordenar(celda).map(p => `<span>${p}</span>`).join(''); };
+    const ui = {
+      estado(i, e){ const el = $('#prog').children[i]; if(el) el.className = e; },
+      msg(t, tipo){ mensaje(msg, t, tipo); },
+      sel(s){ $('#prog').innerHTML = ordenar([...s]).map(p => `<span class="hecho">${p}</span>`).join('') || '<span class="muted" style="width:auto;border:0;background:none;font-size:.9rem">Sin puntos elegidos</span>'; },
+      resultado(ok, faltan=[], sobran=[]){
+        if(ok) return;
+        const partes = []; if(faltan.length) partes.push(`faltaron ${faltan.join(', ')}`); if(sobran.length) partes.push(`sobraron ${sobran.join(', ')}`);
+        mensaje(msg, `Todavía no. ${partes.join(' y ')}. Puede intentarlo de nuevo.`, 'warn');
+      }
+    };
+    $('#p-det').addEventListener('click', () => { nuevaActividad(); bus.enviar({cmd:'STOP_ACTIVITY'}); pintarActual(); $('#prog').innerHTML=''; ['p-sig','p-comp','p-det'].forEach(id => $('#'+id).disabled = true); mensaje(msg,'Práctica detenida.'); });
+    $('#p-sig').addEventListener('click', () => { if(siguienteCelda){ const r = siguienteCelda; siguienteCelda = null; $('#p-sig').disabled = true; r(); } });
+    $('#p-comp').addEventListener('click', () => memActual?.comprobar());
+    $('#p-iniciar').addEventListener('click', async () => {
+      const d = practica.item; if(!d) return;
+      const s = nuevaActividad();
+      $('#p-det').disabled = false;
+      const texto = d.pronunciacion || d.texto || d.nombre;
+      bus.enviar({cmd:'START_ACTIVITY', actividad:'PERSONALIZADO', id:d.id, modo:practica.modo, celdas:d.celdas.map(ordenar)});
+      bus.enviar({cmd:'SPEAK', texto});
+      mensaje(msg, 'El tablero está diciendo el contenido…');
+      await dormir(1300); if(s !== ses) return;
+      for(let i=0;i<d.celdas.length;i++){
+        const celda = d.celdas[i];
+        pintarActual(i); pintarProg(celda);
+        let ok;
+        if(practica.modo === 'guiado'){
+          mensaje(msg, `Celda ${i+1} de ${d.celdas.length}. ${N()} sigue las luces.`);
+          ok = await celdaGuiada(celda, s, 'esperar', ui);
+        } else {
+          $('#prog').innerHTML = '';
+          mensaje(msg, `Celda ${i+1} de ${d.celdas.length}. ${N()} elige los puntos y el adulto comprueba.`);
+          $('#p-comp').disabled = false;
+          ok = await celdaMemoria(celda, s, {confirma:'app', iluminar:true, quitar:true, repetir:false}, ui);
+          $('#p-comp').disabled = true;
+        }
+        if(!ok || s !== ses) return;
+        bus.enviar({cmd:'FEEDBACK', tipo:'correcto'});
+        bus.enviar({cmd:'LEDS_OFF'});
+        if(i < d.celdas.length - 1){
+          if(practica.avance === 'adulto'){
+            mensaje(msg, `Celda ${i+1} correcta. Pulsa «Siguiente celda» cuando ${N()} esté listo.`, 'ok');
+            $('#p-sig').disabled = false;
+            await new Promise(r => siguienteCelda = r); if(s !== ses) return;
+          } else {
+            mensaje(msg, `Celda ${i+1} correcta. Sigue la celda ${i+2}.`, 'ok');
+            await dormir(1300); if(s !== ses) return;
+          }
+        }
+      }
+      bus.enviar({cmd:'SPEAK', texto});
+      bus.enviar({cmd:'FEEDBACK', tipo:'completado'});
+      const guardado = datos.find(x => x.id === d.id);
+      if(guardado){ guardado.practicas = {...cuentas(guardado), [perfiles.activo]: vecesPerfil(guardado) + 1}; guardado.ultima = Date.now(); guardarContenidos(datos); pintarLista(); }
+      pintarActual();
+      $('#p-det').disabled = true;
+      mensaje(msg, `${N()} completó «${d.texto || d.nombre}».` + (d.temporal ? ' Esta palabra no está guardada.' : ''), 'ok');
+    });
+  };
+
+  /* Editor para contenidos avanzados o ajustes a mano */
+  const editor = (item, esNuevo=false) => {
+    const nuevo = !item || esNuevo;
+    const d = item ? JSON.parse(JSON.stringify(item)) :
+      {id:'c'+Date.now().toString(36), nombre:'', tipo:'abreviatura', texto:'', significado:'', pronunciacion:'', celdas:[[]], revisado:false, creado:Date.now(), practicas:{}};
+    delete d.ejemplo; delete d.temporal;
+    panel.innerHTML = cabecera(5, nuevo ? 'Nuevo contenido' : 'Editar contenido', 'Registra la representación Braille tal como la validó una persona con conocimiento de Braille. La app no inventa ni corrige contracciones.') +
+    `<div class="card form">
+      <div class="dos">
+        <div class="campo"><label class="lbl" for="e-nombre">Nombre</label><input id="e-nombre" value="${esc(d.nombre)}" placeholder="Por ejemplo: Abreviatura de la semana"></div>
+        <div class="campo"><label class="lbl" for="e-tipo">Tipo</label><select id="e-tipo">${Object.entries(TIPOS).map(([k,v]) => `<option value="${k}" ${k===d.tipo?'selected':''}>${v}</option>`).join('')}</select></div>
+        <div class="campo"><label class="lbl" for="e-texto">Lo que representa</label><input id="e-texto" value="${esc(d.texto)}" placeholder="Letra, palabra o símbolo"></div>
+        <div class="campo"><label class="lbl" for="e-pron">Lo que dirá el tablero</label><input id="e-pron" value="${esc(d.pronunciacion)}" placeholder="Pronunciación o instrucción"></div>
+      </div>
+      <div class="campo"><label class="lbl" for="e-sig">Significado</label><textarea id="e-sig" rows="2">${esc(d.significado)}</textarea></div>
+      <div class="tablero-head"><span class="lbl">Celdas Braille</span>
+        <span class="row"><button class="btn sec peq" id="e-convertir">Convertir a Braille</button><button class="btn peq" id="e-add">Agregar celda</button></span></div>
+      <div class="ed-celdas" id="e-celdas"></div>
+      <p class="hint">«Convertir a Braille» reemplaza las celdas con la conversión letra por letra en grado I de «Lo que representa». Para contracciones marca los puntos a mano.</p>
+      <div class="toggles"><label><input type="checkbox" id="e-rev" ${d.revisado?'checked':''}> Revisado por una persona con conocimiento de Braille</label></div>
+      <div class="err" id="e-err" aria-live="polite"></div>
+      <div class="row"><button class="btn" id="e-guardar">Guardar en la biblioteca</button><button class="btn sec" id="e-cancelar">Cancelar</button></div>
+    </div>`;
+    const pintarCeldas = () => {
+      $('#e-celdas').innerHTML = d.celdas.map((c,i) => `<div class="ed-celda" data-i="${i}">
+        <span class="lbl">Celda ${i+1}</span>
+        <div class="ed-puntos">${[1,4,2,5,3,6].map(n => `<button data-n="${n}" aria-pressed="${c.includes(n)}" aria-label="Punto ${n}">${n}</button>`).join('')}</div>
+        ${d.celdas.length > 1 ? `<button class="btn sec peq" data-quitar="${i}">Quitar</button>` : ''}
+      </div>`).join('');
+    };
+    pintarCeldas();
+    $('#e-celdas').addEventListener('click', e => {
+      const q = e.target.closest('[data-quitar]');
+      if(q){ d.celdas.splice(+q.dataset.quitar, 1); pintarCeldas(); return; }
+      const p = e.target.closest('[data-n]'); if(!p) return;
+      const i = +p.closest('.ed-celda').dataset.i, n = +p.dataset.n;
+      const c = d.celdas[i];
+      d.celdas[i] = c.includes(n) ? c.filter(x => x !== n) : ordenar([...c, n]);
+      d.origen = 'manual';
+      pintarCeldas();
+    });
+    $('#e-add').addEventListener('click', () => { d.celdas.push([]); d.origen = 'manual'; pintarCeldas(); });
+    $('#e-convertir').addEventListener('click', () => {
+      const r = convertirABraille($('#e-texto').value);
+      if(r.error){ $('#e-err').textContent = r.error; return; }
+      d.celdas = r.celdas; d.origen = 'conversion'; $('#e-err').textContent = ''; pintarCeldas();
+    });
+    $('#e-cancelar').addEventListener('click', render);
+    $('#e-guardar').addEventListener('click', () => {
+      d.nombre = $('#e-nombre').value.trim(); d.tipo = $('#e-tipo').value; d.texto = $('#e-texto').value.trim();
+      d.pronunciacion = $('#e-pron').value.trim(); d.significado = $('#e-sig').value.trim(); d.revisado = $('#e-rev').checked;
+      if(!d.nombre) d.nombre = d.texto;
+      if(!d.nombre){ $('#e-err').textContent = 'Falta el nombre o lo que representa.'; return; }
+      if(!d.celdas.length){ $('#e-err').textContent = 'Agrega al menos una celda.'; return; }
+      const vacia = d.celdas.findIndex(c => !c.length);
+      if(vacia >= 0){ $('#e-err').textContent = `La celda ${vacia+1} no tiene puntos. Márcalos o quítala.`; return; }
+      const i = datos.findIndex(x => x.id === d.id);
+      if(i >= 0) datos[i] = d; else datos.unshift(d);
+      guardarContenidos(datos); render(); elegir(d);
+    });
+  };
+
+  render();
+}
+
+/* Arranque */
+bus.emitir({evt:'DEVICE_READY'});
+pintarLado();
+vistaInicio();
+
+let promptInstalar = null;
+window.addEventListener('beforeinstallprompt', e => { e.preventDefault(); promptInstalar = e; $('#instalar').hidden = false; });
+window.addEventListener('appinstalled', () => { $('#instalar').hidden = true; promptInstalar = null; });
+$('#instalar').addEventListener('click', async () => {
+  if(!promptInstalar) return;
+  promptInstalar.prompt();
+  try{ await promptInstalar.userChoice; }catch(e){}
+  promptInstalar = null; $('#instalar').hidden = true;
+});
+if('serviceWorker' in navigator && location.protocol !== 'file:'){
+  window.addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => {}));
+}
+try{ navigator.storage?.persist?.(); }catch(e){}
+</script>
+</body>
+</html>
