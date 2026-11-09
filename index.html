@@ -318,6 +318,7 @@ function hablar(texto){
   }catch(e){}
 }
 $('#vol').addEventListener('input', e => { volumen = e.target.value/100; });
+$('#vol').addEventListener('change', e => { if(typeof conexion !== 'undefined' && conexion.modo === 'ble') bus.enviar({cmd:'VOLUME', valor:Math.round(e.target.value * 30 / 100)}); });
 
 /* ---------- Registro de mensajes ---------- */
 const logEl = $('#log');
@@ -416,6 +417,7 @@ function aTramas(c){
     case 'PLAY_NOTE': return ['N' + c.boton];
     case 'SPEAK': { const l = String(c.texto).toLowerCase(); return LETRAS.includes(l) ? ['S' + pistaLetra(l)] : []; }
     case 'FEEDBACK': return ['F' + ({correcto:1, reintentar:2, completado:3}[c.tipo])];
+    case 'VOLUME': return ['V' + c.valor];
     default: return [];
   }
 }
@@ -426,7 +428,7 @@ function tramasEvento(e){
 }
 
 /* Conexión Bluetooth con el HM-10: servicio FFE0, característica FFE1 */
-const conexion = {modo:'sim', disp:null, car:null, cola:Promise.resolve(), buffer:''};
+const conexion = {modo:'sim', disp:null, car:null, cola:Promise.resolve(), buffer:'', local:0};
 const esIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
 function aviso(html){ $('#aviso-txt').innerHTML = html; $('#aviso').hidden = false; }
 $('#aviso-x').addEventListener('click', () => $('#aviso').hidden = true);
@@ -453,18 +455,20 @@ async function conectarBLE(){
   if(!navigator.bluetooth){ avisoSinBluetooth(); return; }
   try{
     pintarConexion('Buscando tablero…');
-    const disp = await navigator.bluetooth.requestDevice({
-      filters:[{services:[0xffe0]}, {namePrefix:'HM'}, {namePrefix:'BT'}, {namePrefix:'Tablero'}, {namePrefix:'TABLERO'}],
-      optionalServices:[0xffe0]
-    });
+    const disp = await navigator.bluetooth.requestDevice({acceptAllDevices:true, optionalServices:[0xffe0]});
     pintarConexion('Conectando…');
     disp.addEventListener('gattserverdisconnected', alDesconectar);
     const servidor = await disp.gatt.connect();
-    const servicio = await servidor.getPrimaryService(0xffe0);
+    let servicio;
+    try{ servicio = await servidor.getPrimaryService(0xffe0); }
+    catch(e){
+      try{ disp.gatt.disconnect(); }catch(x){}
+      throw new Error(`${disp.name || 'Ese dispositivo'} no es un tablero. Elige el módulo HM-10, que suele llamarse Tablero, HMSoft o BT05.`);
+    }
     const car = await servicio.getCharacteristic(0xffe1);
     await car.startNotifications();
     car.addEventListener('characteristicvaluechanged', e => recibirBLE(new TextDecoder().decode(e.target.value)));
-    conexion.disp = disp; conexion.car = car; conexion.modo = 'ble'; conexion.buffer = '';
+    conexion.disp = disp; conexion.car = car; conexion.modo = 'ble'; conexion.buffer = ''; conexion.local = 0;
     $('#aviso').hidden = true;
     pintarConexion();
     bus.enviar({cmd:'SET_MODE', modo:tablero.modo});
@@ -472,7 +476,9 @@ async function conectarBLE(){
     conexion.modo = 'sim'; conexion.car = null;
     if(err && err.name === 'NotFoundError'){ pintarConexion(''); return; }
     pintarConexion('');
-    aviso(`No se pudo conectar con el tablero. Revisa que el Bluetooth del celular esté encendido y que el HM-10 tenga corriente. <small>(${esc(err && err.message || err)})</small>`);
+    const detalle = esc([err && err.name, err && err.message].filter(Boolean).join(': ') || String(err));
+    const extra = esIOS ? ' En iPhone revisa también en Ajustes → Bluefy que el permiso de Bluetooth esté activado.' : '';
+    aviso(`No se pudo conectar con el tablero. Revisa que el Bluetooth del celular esté encendido, que el HM-10 tenga corriente y que no esté conectado a otro celular.${extra} <small>(${detalle})</small>`);
   }
 }
 function desconectarBLE(){
@@ -504,7 +510,20 @@ function recibirBLE(texto){
   partes.map(p => p.trim()).filter(Boolean).forEach(linea => {
     const m = /^B([1-6])$/.exec(linea);
     if(m){ const b = +m[1]; tablero.espejoPulsacion(b); bus.emitir({evt:'BUTTON_PRESSED', boton:b}, [linea]); }
-    else if(linea === 'R'){ bus.emitir({evt:'DEVICE_READY'}, [linea]); }
+    else if(linea === 'R'){
+      bus.emitir({evt:'DEVICE_READY'}, [linea]);
+      if(conexion.local){ conexion.local = 0; $('#aviso').hidden = true; }
+      bus.enviar({cmd:'SET_MODE', modo:tablero.modo});
+    }
+    else if(/^P[1-3]$/.test(linea)){
+      log('in', {evt:'MODO_LOCAL'}, [linea]);
+      const n = +linea[1];
+      if(conexion.local !== n){
+        conexion.local = n;
+        const nombre = {1:'Piano libre', 2:'Acción–reacción', 3:'Aprendizaje'}[n];
+        aviso(`El tablero está funcionando solo en el modo ${nombre}. Gira la perilla a <strong>Bluetooth</strong> para controlarlo desde la app.`);
+      }
+    }
     else log('in', {evt:'DESCONOCIDO'}, [linea]);
   });
 }
@@ -925,6 +944,7 @@ function vistaGuiada(){
     const ok = await celdaGuiada(ABC[letra], s, avance, ui); if(!ok || s !== ses) return;
     await dormir(400); if(s !== ses) return;
     bus.enviar({cmd:'SPEAK', texto:letra.toUpperCase()});
+    await dormir(900); if(s !== ses) return;
     bus.enviar({cmd:'FEEDBACK', tipo:'completado'});
     mensaje(msg, `${N()} completó la letra ${letra.toUpperCase()}.`, 'ok');
     $('#detener').disabled = true;
@@ -1000,9 +1020,10 @@ function vistaMemoria(){
     await celdaMemoria(ABC[letra], s, {...op, texto:letra.toUpperCase()}, ui);
     if(s !== ses) return;
     activos(false);
-    bus.enviar({cmd:'SPEAK', texto:letra.toUpperCase()});
-    bus.enviar({cmd:'FEEDBACK', tipo:'completado'});
     bus.enviar({cmd:'LEDS_OFF'});
+    bus.enviar({cmd:'SPEAK', texto:letra.toUpperCase()});
+    await dormir(900); if(s !== ses) return;
+    bus.enviar({cmd:'FEEDBACK', tipo:'completado'});
     mensaje(msg, `¡Correcto! ${N()} recordó la letra ${letra.toUpperCase()}.`, 'ok');
   });
 }
@@ -1298,6 +1319,7 @@ function vistaPersonalizado(){
         }
       }
       bus.enviar({cmd:'SPEAK', texto});
+      await dormir(1200); if(s !== ses) return;
       bus.enviar({cmd:'FEEDBACK', tipo:'completado'});
       const guardado = datos.find(x => x.id === d.id);
       if(guardado){ guardado.practicas = {...cuentas(guardado), [perfiles.activo]: vecesPerfil(guardado) + 1}; guardado.ultima = Date.now(); guardarContenidos(datos); pintarLista(); }
