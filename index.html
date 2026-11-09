@@ -451,11 +451,15 @@ function avisoSinBluetooth(){
     catch(e){ const r = document.createRange(); r.selectNodeContents($('#aviso-url')); const sel = getSelection(); sel.removeAllRanges(); sel.addRange(r); }
   });
 }
-async function conectarBLE(){
+async function conectarBLE(todos){
   if(!navigator.bluetooth){ avisoSinBluetooth(); return; }
   try{
     pintarConexion('Buscando tablero…');
-    const disp = await navigator.bluetooth.requestDevice({acceptAllDevices:true, optionalServices:['0000ffe0-0000-1000-8000-00805f9b34fb']});
+    const SERV = '0000ffe0-0000-1000-8000-00805f9b34fb';
+    const prefijos = ['SIRO','Siro','siro','Braille','braille','BRAILLE','Tablero','tablero','TABLERO','HM','BT','MLT','JDY','CC41'];
+    const opciones = todos ? {acceptAllDevices:true, optionalServices:[SERV]}
+      : {filters:[{services:[SERV]}, ...prefijos.map(p => ({namePrefix:p}))], optionalServices:[SERV]};
+    const disp = await navigator.bluetooth.requestDevice(opciones);
     pintarConexion('Conectando…');
     disp.addEventListener('gattserverdisconnected', alDesconectar);
     const servidor = await disp.gatt.connect();
@@ -474,7 +478,11 @@ async function conectarBLE(){
     bus.enviar({cmd:'SET_MODE', modo:tablero.modo});
   }catch(err){
     conexion.modo = 'sim'; conexion.car = null;
-    if(err && err.name === 'NotFoundError'){ pintarConexion(''); return; }
+    if(err && err.name === 'NotFoundError'){
+      pintarConexion('');
+      if(!todos) avisoTodos();
+      return;
+    }
     pintarConexion('');
     const detalle = esc((err && typeof err === 'object') ? ([err.name, err.message].filter(Boolean).join(': ') || JSON.stringify(err)) : ('código ' + String(err)));
     const extra = esIOS ? ' En iPhone revisa también en Ajustes → Bluefy que el permiso de Bluetooth esté activado.' : '';
@@ -537,7 +545,11 @@ function pintarLado(){
   $('#lado').hidden = vacio;
   document.querySelector('.app').classList.toggle('solo', vacio);
 }
-$('#conn-ble').addEventListener('click', () => { if(conexion.modo !== 'ble') conectarBLE(); });
+function avisoTodos(){
+  aviso('¿No apareció tu tablero en la lista? <button class="btn sec peq" id="ver-todos">Mostrar todos los dispositivos</button>');
+  $('#ver-todos').addEventListener('click', () => conectarBLE(true));
+}
+$('#conn-ble').addEventListener('click', () => { if(conexion.modo !== 'ble') conectarBLE(false); });
 $('#conn-sim').addEventListener('click', () => { if(conexion.modo === 'ble') desconectarBLE(); });
 
 const bus = {
