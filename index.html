@@ -455,17 +455,17 @@ async function conectarBLE(){
   if(!navigator.bluetooth){ avisoSinBluetooth(); return; }
   try{
     pintarConexion('Buscando tablero…');
-    const disp = await navigator.bluetooth.requestDevice({acceptAllDevices:true, optionalServices:[0xffe0]});
+    const disp = await navigator.bluetooth.requestDevice({acceptAllDevices:true, optionalServices:['0000ffe0-0000-1000-8000-00805f9b34fb']});
     pintarConexion('Conectando…');
     disp.addEventListener('gattserverdisconnected', alDesconectar);
     const servidor = await disp.gatt.connect();
     let servicio;
-    try{ servicio = await servidor.getPrimaryService(0xffe0); }
+    try{ servicio = await servidor.getPrimaryService('0000ffe0-0000-1000-8000-00805f9b34fb'); }
     catch(e){
       try{ disp.gatt.disconnect(); }catch(x){}
       throw new Error(`${disp.name || 'Ese dispositivo'} no es un tablero. Elige el módulo HM-10, que suele llamarse Tablero, HMSoft o BT05.`);
     }
-    const car = await servicio.getCharacteristic(0xffe1);
+    const car = await servicio.getCharacteristic('0000ffe1-0000-1000-8000-00805f9b34fb');
     await car.startNotifications();
     car.addEventListener('characteristicvaluechanged', e => recibirBLE(new TextDecoder().decode(e.target.value)));
     conexion.disp = disp; conexion.car = car; conexion.modo = 'ble'; conexion.buffer = ''; conexion.local = 0;
@@ -476,7 +476,7 @@ async function conectarBLE(){
     conexion.modo = 'sim'; conexion.car = null;
     if(err && err.name === 'NotFoundError'){ pintarConexion(''); return; }
     pintarConexion('');
-    const detalle = esc([err && err.name, err && err.message].filter(Boolean).join(': ') || String(err));
+    const detalle = esc((err && typeof err === 'object') ? ([err.name, err.message].filter(Boolean).join(': ') || JSON.stringify(err)) : ('código ' + String(err)));
     const extra = esIOS ? ' En iPhone revisa también en Ajustes → Bluefy que el permiso de Bluetooth esté activado.' : '';
     aviso(`No se pudo conectar con el tablero. Revisa que el Bluetooth del celular esté encendido, que el HM-10 tenga corriente y que no esté conectado a otro celular.${extra} <small>(${detalle})</small>`);
   }
